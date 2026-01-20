@@ -279,21 +279,30 @@ const AdminPanel = () => {
     });
   }, [activityLogs, dateRange]);
 
+  // --- COMPUTED DATA ---
   const chartData = useMemo(() => {
     const dateCount = {};
     const categoryCount = {};
+    const gameCount = {}; // <--- NEW: Track game clicks
 
     filteredLogs
       .slice()
       .reverse()
       .forEach((log) => {
+        // 1. Date Logic
         const date = new Date(log.timestamp.seconds * 1000).toLocaleDateString(
           undefined,
           { month: "short", day: "numeric" }
         );
         dateCount[date] = (dateCount[date] || 0) + 1;
+
+        // 2. Category Logic
         const cat = log.category || "Other";
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+
+        // 3. Game Logic <--- NEW
+        const game = log.gameTitle || "Unknown";
+        gameCount[game] = (gameCount[game] || 0) + 1;
       });
 
     return {
@@ -305,6 +314,14 @@ const AdminPanel = () => {
         name: k,
         value: categoryCount[k],
       })),
+      // Sort by value (high to low) and take Top 5 to keep chart clean
+      games: Object.keys(gameCount)
+        .map((k) => ({
+          name: k,
+          value: gameCount[k],
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5), 
     };
   }, [filteredLogs]);
 
@@ -543,7 +560,10 @@ const AdminPanel = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Updated Grid to support 3 columns on XL screens */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                
+                {/* 1. TIMELINE */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.timeline}>
@@ -559,6 +579,7 @@ const AdminPanel = () => {
                           backgroundColor: "#0f172a",
                           border: "1px solid #1e293b",
                           borderRadius: "8px",
+                          color: "#fff",
                         }}
                         cursor={{ fill: "#1e293b" }}
                       />
@@ -570,6 +591,8 @@ const AdminPanel = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
+
+                {/* 2. CATEGORY PIE */}
                 <ChartCard title="Category Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -582,7 +605,7 @@ const AdminPanel = () => {
                       >
                         {chartData.categories.map((entry, index) => (
                           <Cell
-                            key={`cell-${index}`}
+                            key={`cell-cat-${index}`}
                             fill={COLORS[index % COLORS.length]}
                             stroke="#0f172a"
                             strokeWidth={2}
@@ -594,11 +617,59 @@ const AdminPanel = () => {
                           backgroundColor: "#0f172a",
                           border: "1px solid #1e293b",
                           borderRadius: "8px",
+                          color: "#fff",
                         }}
                       />
                       <Legend
                         iconType="circle"
-                        wrapperStyle={{ fontSize: "12px" }}
+                        wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+
+                {/* 3. NEW: GAMES PIE */}
+                <ChartCard title="Top 5 Games">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData.games}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        // Using a slightly different style (solid pie) to distinguish from categories
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value, index }) => {
+                           // Only show label if slice is big enough
+                           if(value < 1) return null; 
+                           return null; 
+                        }}
+                      >
+                        {chartData.games.map((entry, index) => (
+                          <Cell
+                            key={`cell-game-${index}`}
+                            // Reverse colors to make it look distinct from the category chart
+                            fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]}
+                            stroke="#0f172a"
+                            strokeWidth={2}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #1e293b",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Legend 
+                        layout="horizontal" 
+                        verticalAlign="bottom" 
+                        align="center"
+                        iconType="square"
+                        wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
                       />
                     </PieChart>
                   </ResponsiveContainer>

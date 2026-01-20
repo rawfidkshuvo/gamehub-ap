@@ -13,10 +13,14 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "d3-scale": "^4.0.2",
     "firebase": "^12.8.0",
     "lucide-react": "^0.562.0",
+    "prop-types": "^15.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-is": "^19.2.3",
+    "react-simple-maps": "^3.0.0",
     "recharts": "^3.6.0"
   },
   "devDependencies": {

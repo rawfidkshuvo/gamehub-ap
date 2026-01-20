@@ -10,6 +10,7 @@ import {
   getFirestore,
   doc,
   setDoc,
+  addDoc, // New: For audit logs
   onSnapshot,
   collection,
   query,
@@ -39,9 +40,11 @@ import {
   Eye,
   Sparkles,
   Flame,
-  Clock,
+  Clock, // Used for Heatmap header
   Crown,
   Lock,
+  Shield, // New: Security Icon
+  Globe,  // New: Map Icon
 } from "lucide-react";
 import {
   BarChart,
@@ -54,8 +57,10 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
+import { scaleLinear } from "d3-scale";
 
-// --- STATIC GAME DATA (For Titles/IDs) ---
+// --- STATIC GAME DATA ---
 const KNOWN_GAMES = [
   { id: 1, title: "Conspiracy" },
   { id: 2, title: "Investigation" },
@@ -78,7 +83,7 @@ const KNOWN_GAMES = [
   { id: 24, title: "Spectrum" },
 ];
 
-// --- FIREBASE CONFIGURATION (SECURE) ---
+// --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "game-hub-ff8aa.firebaseapp.com",
@@ -110,12 +115,13 @@ const AdminPanel = () => {
   // UI State
   const [activeView, setActiveView] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [dateRange, setDateRange] = useState("7");
+  const [dateRange, setDateRange] = useState("7"); // Default 7 Days
 
   // Data State
   const [gamesConfig, setGamesConfig] = useState({});
   const [gameStats, setGameStats] = useState({});
   const [activityLogs, setActivityLogs] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]); // New: Audit Logs
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [systemMessage, setSystemMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,7 +132,6 @@ const AdminPanel = () => {
   // --- AUTH ---
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      // Check for your specific admin email
       if (u && u.email === "admin@rawfidsgamehub.com") setUser(u);
       else setUser(null);
     });
@@ -142,22 +147,40 @@ const AdminPanel = () => {
     }
   };
 
-  // --- UPDATED DATA SYNC ---
+  // --- AUDIT LOGGER ---
+  const logAdminAction = async (action, details) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, "admin_audit_logs"), {
+        timestamp: new Date(),
+        adminEmail: user.email,
+        action: action,
+        details: details,
+      });
+    } catch (err) {
+      console.error("Failed to log action", err);
+    }
+  };
+
+  // --- DATA SYNC ---
   useEffect(() => {
     if (!user) return;
 
-    // 1. Config (Unchanged)
-    const unsubConfig = onSnapshot(doc(db, "game_hub_settings", "config"), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setMaintenanceMode(data.maintenanceMode || false);
-        setSystemMessage(data.systemMessage || "");
-        const { maintenanceMode, systemMessage, ...games } = data;
-        setGamesConfig(games);
+    // 1. Config
+    const unsubConfig = onSnapshot(
+      doc(db, "game_hub_settings", "config"),
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          setMaintenanceMode(data.maintenanceMode || false);
+          setSystemMessage(data.systemMessage || "");
+          const { maintenanceMode, systemMessage, ...games } = data;
+          setGamesConfig(games);
+        }
       }
-    });
+    );
 
-    // 2. Stats (Unchanged)
+    // 2. Stats (All-Time Data)
     const unsubStats = onSnapshot(collection(db, "game_stats"), (snap) => {
       const stats = {};
       snap.docs.forEach(
@@ -166,30 +189,40 @@ const AdminPanel = () => {
       setGameStats(stats);
     });
 
-    // 3. Logs (UPDATED: Dynamic Limit based on Timeframe)
-    // We calculate a limit based on the selected range to ensure we get enough data
-    // 24H = 500, 7D = 1000, 30D+ = 5000 (Adjust these numbers based on your traffic)
-    let logLimit = 500; 
+    // 3. Logs (Dynamic Limit based on Timeframe)
+    // Adjust limit so charts have enough data for 1Y vs 24H
+    let logLimit = 500;
     const days = parseInt(dateRange);
     if (days > 1) logLimit = 2000;
     if (days > 30) logLimit = 5000;
+    if (days > 100) logLimit = 8000;
 
     const q = query(
       collection(db, "game_click_logs"),
       orderBy("timestamp", "desc"),
-      limit(logLimit) // <--- Now this scales with your selection
+      limit(logLimit)
     );
-
     const unsubLogs = onSnapshot(q, (snap) => {
       setActivityLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    // 4. Audit Logs (New)
+    const auditQ = query(
+      collection(db, "admin_audit_logs"),
+      orderBy("timestamp", "desc"),
+      limit(100)
+    );
+    const unsubAudit = onSnapshot(auditQ, (snap) => {
+      setAuditLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
     return () => {
       unsubConfig();
       unsubStats();
       unsubLogs();
+      unsubAudit();
     };
-  }, [user, dateRange]); // <--- IMPORTANT: Added dateRange to dependency array
+  }, [user, dateRange]); // Re-run when dateRange changes
 
   // --- ACTIONS ---
   const saveChanges = async () => {
@@ -199,6 +232,7 @@ const AdminPanel = () => {
         maintenanceMode,
         systemMessage,
       });
+      await logAdminAction("System Update", "Saved global config changes");
       alert("System Updated Successfully!");
     } catch (err) {
       alert("Save failed: " + err.message);
@@ -206,10 +240,12 @@ const AdminPanel = () => {
   };
 
   const handleGameToggle = (id, field) => {
+    const gameTitle = gamesConfig[id]?.title || `ID ${id}`;
     setGamesConfig((prev) => ({
       ...prev,
       [id]: { ...prev[id], [field]: !prev[id]?.[field] },
     }));
+    logAdminAction("Game Toggle", `Toggled ${field} for ${gameTitle}`);
   };
 
   const exportCSV = () => {
@@ -268,9 +304,10 @@ const AdminPanel = () => {
     });
 
     setGamesConfig(newConfig);
+    logAdminAction("Bulk Update", `Set ${field} to ${targetValue} for ${selectedIds.length} games`);
   };
 
-  // --- COMPUTED DATA ---
+  // --- COMPUTED DATA FOR CHARTS ---
   const filteredLogs = useMemo(() => {
     const now = new Date();
     const cutoff = new Date();
@@ -283,11 +320,10 @@ const AdminPanel = () => {
     });
   }, [activityLogs, dateRange]);
 
-  // --- COMPUTED DATA ---
   const chartData = useMemo(() => {
     const dateCount = {};
     const categoryCount = {};
-    const recentGameCount = {}; // For the "Top 5 Recent" chart
+    const recentGameCount = {}; 
 
     // 1. Process Logs (Timeline, Categories, Recent Games)
     filteredLogs
@@ -333,8 +369,8 @@ const AdminPanel = () => {
         name: k,
         value: categoryCount[k],
       })),
-      recentGames: recentGamesData, // Chart 1 (From previous request)
-      organic: organicData,         // Chart 2 (From this request)
+      recentGames: recentGamesData,
+      organic: organicData,
     };
   }, [filteredLogs, gameStats]);
 
@@ -416,6 +452,12 @@ const AdminPanel = () => {
             active={activeView === "games"}
             onClick={() => setActiveView("games")}
           />
+          <SidebarItem
+            icon={<Shield size={18} />}
+            label="Audit Logs"
+            active={activeView === "security"}
+            onClick={() => setActiveView("security")}
+          />
 
           <div className="mt-8">
             <div className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -469,8 +511,10 @@ const AdminPanel = () => {
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               {activeView === "dashboard" ? (
                 <LayoutDashboard className="text-indigo-500" size={20} />
-              ) : (
+              ) : activeView === "games" ? (
                 <Gamepad2 className="text-indigo-500" size={20} />
+              ) : (
+                <Shield className="text-indigo-500" size={20} />
               )}
               <span className="capitalize">{activeView}</span>
             </h2>
@@ -581,9 +625,8 @@ const AdminPanel = () => {
                 />
               </div>
 
-              {/* 2x2 Grid for 4 Charts */}
+              {/* 2x2 Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                
                 {/* 1. TIMELINE */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
@@ -591,7 +634,7 @@ const AdminPanel = () => {
                       <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#f8fafc" }} 
-                        itemStyle={{ color: "#f8fafc" }} /* Ensures text is white */
+                        itemStyle={{ color: "#f8fafc" }}
                         cursor={{ fill: "#1e293b" }} 
                       />
                       <Bar dataKey="clicks" fill="#6366f1" radius={[4, 4, 0, 0]} />
@@ -616,7 +659,7 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                        itemStyle={{ color: "#e2e8f0" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
@@ -643,7 +686,7 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                        itemStyle={{ color: "#e2e8f0" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
@@ -670,20 +713,41 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                        itemStyle={{ color: "#e2e8f0" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
+              </div>
 
+              {/* --- NEW VISUALIZATION SECTION --- */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+                {/* 1. World Map (Takes up 2 columns) */}
+                <div className="xl:col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
+                  <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
+                    <Globe size={14} /> Global Traffic Map
+                  </h3>
+                  <div className="flex-1 rounded-lg border border-slate-800 overflow-hidden relative">
+                    <WorldMapWidget data={filteredLogs} />
+                  </div>
+                </div>
+
+                {/* 2. Heatmap (Takes up 1 column) */}
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
+                  <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
+                    <Clock size={14} /> Peak Activity Heatmap
+                  </h3>
+                  <div className="flex-1">
+                    <UsageHeatmap data={filteredLogs} />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
                 <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                   <div className="font-bold text-white flex items-center gap-2">
-                    <List size={16} className="text-indigo-500" /> Recent
-                    Activity Log
+                    <List size={16} className="text-indigo-500" /> Recent Activity Log
                   </div>
                   <button
                     onClick={exportCSV}
@@ -704,7 +768,7 @@ const AdminPanel = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/50">
-                      {activityLogs.slice(0, 100).map((log) => (
+                      {activityLogs.slice(0, 50).map((log) => (
                         <tr
                           key={log.id}
                           className="hover:bg-slate-800/50 transition-colors"
@@ -852,7 +916,10 @@ const AdminPanel = () => {
                         Emergency:
                       </span>
                       <button
-                        onClick={() => setMaintenanceMode(!maintenanceMode)}
+                        onClick={() => {
+                          setMaintenanceMode(!maintenanceMode);
+                          logAdminAction("Emergency", `Toggled Maintenance Mode to ${!maintenanceMode}`);
+                        }}
                         className={`w-12 h-6 rounded-full p-1 transition-colors ${
                           maintenanceMode
                             ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
@@ -977,6 +1044,7 @@ const AdminPanel = () => {
                                     isFeatured: true,
                                   };
                                   setGamesConfig(newConfig);
+                                  logAdminAction("Featured", `Set ${game.title} as Featured`);
                                 }}
                                 className="accent-emerald-500 w-4 h-4 cursor-pointer"
                               />
@@ -1026,7 +1094,6 @@ const AdminPanel = () => {
                                   const val = parseInt(e.target.value) || 0;
                                   setGamesConfig((prev) => ({
                                     ...prev,
-                                    // REPLACE [field] WITH popularity
                                     [id]: { ...prev[id], popularity: val },
                                   }));
                                 }}
@@ -1042,13 +1109,70 @@ const AdminPanel = () => {
               </div>
             </div>
           )}
+
+          {/* --- AUDIT LOGS VIEW (NEW) --- */}
+          {activeView === "security" && (
+            <div className="space-y-6 max-w-7xl mx-auto pb-20">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                  <div className="font-bold text-white flex items-center gap-2">
+                    <Shield size={16} className="text-indigo-500" /> Admin Audit Trail
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-950 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                      <tr>
+                        <th className="px-6 py-3">Timestamp</th>
+                        <th className="px-6 py-3">Admin</th>
+                        <th className="px-6 py-3">Action</th>
+                        <th className="px-6 py-3">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-800/30">
+                          <td className="px-6 py-4 text-slate-400 font-mono text-xs whitespace-nowrap">
+                            {log.timestamp?.seconds 
+                              ? new Date(log.timestamp.seconds * 1000).toLocaleString() 
+                              : "Pending..."}
+                          </td>
+                          <td className="px-6 py-4 text-white font-medium">
+                            {log.adminEmail}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              log.action.includes("Toggle") 
+                                ? "bg-blue-900/30 text-blue-400 border border-blue-800"
+                                : "bg-purple-900/30 text-purple-400 border border-purple-800"
+                            }`}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-400 text-xs">
+                            {log.details}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {auditLogs.length === 0 && (
+                    <div className="p-8 text-center text-slate-500 italic">
+                      No admin actions recorded yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
   );
 };
 
-// --- SMALL COMPONENTS ---
+// --- SUB-COMPONENTS ---
+
 const SidebarItem = ({ icon, label, active, onClick }) => (
   <button
     onClick={onClick}
@@ -1128,5 +1252,122 @@ const Checkbox = ({ checked, onChange, colorClass }) => (
     {checked && <CheckSquare size={14} className="text-white" />}
   </div>
 );
+
+const WorldMapWidget = ({ data }) => {
+  const countryData = useMemo(() => {
+    const counts = {};
+    data.forEach((log) => {
+      const country = log.country || "Unknown";
+      counts[country] = (counts[country] || 0) + 1;
+    });
+    return counts;
+  }, [data]);
+
+  const colorScale = scaleLinear()
+    .domain([0, Math.max(...Object.values(countryData), 1)])
+    .range(["#1e293b", "#6366f1"]); 
+
+  return (
+    <div className="w-full h-full bg-slate-950 rounded-xl overflow-hidden relative">
+      <ComposableMap
+        projectionConfig={{ scale: 140 }}
+        style={{ width: "100%", height: "100%" }}
+      >
+        <ZoomableGroup>
+          <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+            {({ geographies }) =>
+              geographies.map((geo) => {
+                const countryName = geo.properties.name;
+                const clicks = countryData[countryName] || 0;
+                return (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    fill={clicks > 0 ? colorScale(clicks) : "#334155"}
+                    stroke="#0f172a"
+                    strokeWidth={0.5}
+                    style={{
+                      default: { outline: "none" },
+                      hover: { fill: "#f472b6", outline: "none", cursor: "pointer" },
+                      pressed: { outline: "none" },
+                    }}
+                  />
+                );
+              })
+            }
+          </Geographies>
+        </ZoomableGroup>
+      </ComposableMap>
+      <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur p-3 rounded-lg border border-slate-800 text-xs text-slate-300 pointer-events-none">
+        <div className="font-bold text-white mb-1">Top Regions</div>
+        {Object.entries(countryData)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3)
+          .map(([name, count]) => (
+            <div key={name} className="flex justify-between gap-4">
+              <span>{name}</span>
+              <span className="text-indigo-400">{count}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+};
+
+const UsageHeatmap = ({ data }) => {
+  const heatmap = useMemo(() => {
+    const grid = Array(7).fill(0).map(() => Array(24).fill(0));
+    let max = 0;
+    data.forEach(log => {
+      const d = new Date(log.timestamp.seconds * 1000);
+      const day = d.getDay();
+      const hour = d.getHours();
+      grid[day][hour]++;
+      if (grid[day][hour] > max) max = grid[day][hour];
+    });
+    return { grid, max };
+  }, [data]);
+
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <div className="flex flex-col h-full overflow-x-auto">
+      <div className="flex">
+        <div className="w-10 shrink-0"></div>
+        <div className="flex-1 grid grid-cols-24 mb-2">
+          {Array(24).fill(0).map((_, i) => (
+            <div key={i} className="text-[9px] text-slate-500 text-center border-l border-slate-800/50">
+              {i % 3 === 0 ? i : ""}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col justify-between">
+        {heatmap.grid.map((row, dayIdx) => (
+          <div key={dayIdx} className="flex items-center h-8">
+            <div className="w-10 shrink-0 text-[10px] text-slate-400 font-bold">{days[dayIdx]}</div>
+            <div className="flex-1 grid grid-cols-24 gap-[2px] h-full">
+              {row.map((val, hourIdx) => (
+                <div
+                  key={hourIdx}
+                  className="rounded-sm transition-all hover:ring-1 ring-white/50 relative group"
+                  style={{
+                    backgroundColor: val > 0 ? `rgba(99, 102, 241, ${Math.max(0.15, val / (heatmap.max || 1))})` : '#1e293b'
+                  }}
+                >
+                  {val > 0 && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-900 text-white text-[10px] px-2 py-1 rounded border border-slate-700 whitespace-nowrap z-50">
+                      {val} clicks at {hourIdx}:00
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default AdminPanel;

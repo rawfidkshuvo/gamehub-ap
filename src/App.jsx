@@ -1253,12 +1253,21 @@ const StatCard = ({ label, value, icon, subtext }) => (
 
 const ChartCard = ({ title, children }) => (
   <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-80 flex flex-col shadow-lg">
-    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
+    {/* Header: shrink-0 ensures it doesn't get squished */}
+    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2 shrink-0">
       <BarChart3 size={14} /> {title}
     </h3>
-    {/* The fix is here: w-full and h-full ensure the ResponsiveContainer has space to render */}
-    <div className="flex-1 w-full h-full min-h-0 relative">
-      {children}
+    
+    {/* THE FIX: 
+      1. 'flex-1 relative': Fills remaining space, establishes positioning context.
+      2. 'min-h-0': Prevents flexbox overflow bugs.
+      3. Inner 'absolute inset-0': Strictly forces the content to match the parent's size 
+         ignoring flex calculation delays.
+    */}
+    <div className="flex-1 relative w-full min-h-0">
+      <div className="absolute inset-0 w-full h-full">
+        {children}
+      </div>
     </div>
   </div>
 );

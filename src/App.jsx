@@ -523,18 +523,26 @@ const AdminPanel = () => {
                 <h3 className="text-slate-400 font-bold text-sm uppercase flex items-center gap-2">
                   <BarChart3 size={16} /> Performance Metrics
                 </h3>
-                <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
-                  {["1", "7", "30"].map((d) => (
+                <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 overflow-x-auto max-w-full">
+                  {[
+                    { label: "24H", value: "1" },
+                    { label: "7D", value: "7" },
+                    { label: "30D", value: "30" },
+                    { label: "3M", value: "90" },
+                    { label: "6M", value: "180" },
+                    { label: "9M", value: "270" },
+                    { label: "1Y", value: "365" },
+                  ].map((opt) => (
                     <button
-                      key={d}
-                      onClick={() => setDateRange(d)}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${
-                        dateRange === d
-                          ? "bg-indigo-600 text-white shadow"
-                          : "text-slate-400 hover:text-white"
+                      key={opt.value}
+                      onClick={() => setDateRange(opt.value)}
+                      className={`px-3 py-1.5 rounded-md text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${
+                        dateRange === opt.value
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
+                          : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
                       }`}
                     >
-                      {d === "1" ? "24H" : `${d}D`}
+                      {opt.label}
                     </button>
                   ))}
                 </div>
@@ -572,18 +580,22 @@ const AdminPanel = () => {
               {/* 2x2 Grid for 4 Charts */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                 
-                {/* 1. TIMELINE (Bar Chart - Unchanged) */}
+                {/* 1. TIMELINE */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.timeline}>
                       <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} cursor={{ fill: "#1e293b" }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#f8fafc" }} 
+                        itemStyle={{ color: "#f8fafc" }} /* Ensures text is white */
+                        cursor={{ fill: "#1e293b" }} 
+                      />
                       <Bar dataKey="clicks" fill="#6366f1" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 2. CATEGORY DISTRIBUTION (The Reference Style) */}
+                {/* 2. CATEGORY DISTRIBUTION */}
                 <ChartCard title="Category Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -598,13 +610,16 @@ const AdminPanel = () => {
                           <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                      />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 3. RECENT TOP 5 (Now matches Category Style) */}
+                {/* 3. RECENT TOP 5 */}
                 <ChartCard title="Top 5 Games (Selected Period)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -614,21 +629,24 @@ const AdminPanel = () => {
                         nameKey="name" 
                         cx="50%" 
                         cy="50%" 
-                        innerRadius={60} // Added donut hole
+                        innerRadius={60} 
                         outerRadius={80} 
-                        paddingAngle={5} // Added spacing
+                        paddingAngle={5}
                       >
                         {chartData.recentGames.map((entry, index) => (
                           <Cell key={`cell-recent-${index}`} fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                      />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 4. TOTAL ORGANIC CLICKS (Now matches Category Style) */}
+                {/* 4. TOTAL ORGANIC CLICKS */}
                 <ChartCard title="Total Organic Clicks (All Time)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -638,16 +656,18 @@ const AdminPanel = () => {
                         nameKey="name" 
                         cx="50%" 
                         cy="50%" 
-                        innerRadius={60} // Added donut hole
+                        innerRadius={60} 
                         outerRadius={80} 
-                        paddingAngle={5} // Added spacing
+                        paddingAngle={5}
                       >
                         {chartData.organic.map((entry, index) => (
                           <Cell key={`cell-org-${index}`} fill={COLORS[(index + 3) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
-                      {/* Removed the on-chart text labels to keep the clean donut look */}
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                        itemStyle={{ color: "#e2e8f0" }} /* FIX: Sets list text to light gray */
+                      />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>

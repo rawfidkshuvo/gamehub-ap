@@ -1252,22 +1252,17 @@ const StatCard = ({ label, value, icon, subtext }) => (
 );
 
 const ChartCard = ({ title, children }) => (
-  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-80 flex flex-col shadow-lg">
-    {/* Header: shrink-0 ensures it doesn't get squished */}
-    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2 shrink-0">
+  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg">
+    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
       <BarChart3 size={14} /> {title}
     </h3>
     
-    {/* THE FIX: 
-      1. 'flex-1 relative': Fills remaining space, establishes positioning context.
-      2. 'min-h-0': Prevents flexbox overflow bugs.
-      3. Inner 'absolute inset-0': Strictly forces the content to match the parent's size 
-         ignoring flex calculation delays.
+    {/* FIX: Changed from "flex-1" to strict "h-64" (256px).
+       This guarantees the container has a valid height immediately,
+       solving the width(-1) error.
     */}
-    <div className="flex-1 relative w-full min-h-0">
-      <div className="absolute inset-0 w-full h-full">
-        {children}
-      </div>
+    <div className="h-64 w-full relative">
+      {children}
     </div>
   </div>
 );

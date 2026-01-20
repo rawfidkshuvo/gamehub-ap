@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -10,7 +10,7 @@ import {
   getFirestore,
   doc,
   setDoc,
-  addDoc, // New: For audit logs
+  addDoc,
   onSnapshot,
   collection,
   query,
@@ -40,11 +40,11 @@ import {
   Eye,
   Sparkles,
   Flame,
-  Clock, // Used for Heatmap header
+  Clock,
   Crown,
   Lock,
-  Shield, // New: Security Icon
-  Globe,  // New: Map Icon
+  Shield,
+  Globe,
 } from "lucide-react";
 import {
   BarChart,
@@ -115,16 +115,19 @@ const AdminPanel = () => {
   // UI State
   const [activeView, setActiveView] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [dateRange, setDateRange] = useState("7"); // Default 7 Days
+  const [dateRange, setDateRange] = useState("7");
 
   // Data State
   const [gamesConfig, setGamesConfig] = useState({});
   const [gameStats, setGameStats] = useState({});
   const [activityLogs, setActivityLogs] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]); // New: Audit Logs
+  const [auditLogs, setAuditLogs] = useState([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [systemMessage, setSystemMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Change Tracking State (To compare "Draft" vs "Server")
+  const lastServerState = useRef(null);
 
   // Bulk Action State
   const [selectedGames, setSelectedGames] = useState(new Set());
@@ -172,15 +175,19 @@ const AdminPanel = () => {
       (doc) => {
         if (doc.exists()) {
           const data = doc.data();
+          // Set UI State
           setMaintenanceMode(data.maintenanceMode || false);
           setSystemMessage(data.systemMessage || "");
           const { maintenanceMode, systemMessage, ...games } = data;
           setGamesConfig(games);
+
+          // Store a copy of the server state for "Diffing" later
+          lastServerState.current = JSON.parse(JSON.stringify(data));
         }
       }
     );
 
-    // 2. Stats (All-Time Data)
+    // 2. Stats
     const unsubStats = onSnapshot(collection(db, "game_stats"), (snap) => {
       const stats = {};
       snap.docs.forEach(
@@ -189,8 +196,7 @@ const AdminPanel = () => {
       setGameStats(stats);
     });
 
-    // 3. Logs (Dynamic Limit based on Timeframe)
-    // Adjust limit so charts have enough data for 1Y vs 24H
+    // 3. Logs (Dynamic Limit)
     let logLimit = 500;
     const days = parseInt(dateRange);
     if (days > 1) logLimit = 2000;
@@ -206,7 +212,7 @@ const AdminPanel = () => {
       setActivityLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    // 4. Audit Logs (New)
+    // 4. Audit Logs
     const auditQ = query(
       collection(db, "admin_audit_logs"),
       orderBy("timestamp", "desc"),
@@ -222,44 +228,80 @@ const AdminPanel = () => {
       unsubLogs();
       unsubAudit();
     };
-  }, [user, dateRange]); // Re-run when dateRange changes
+  }, [user, dateRange]);
 
-  // --- ACTIONS ---
+
+  // --- SAVE ACTIONS (WITH DIFF LOGIC) ---
   const saveChanges = async () => {
     try {
-      await setDoc(doc(db, "game_hub_settings", "config"), {
+      // 1. Prepare the Data for Firestore
+      const newData = {
         ...gamesConfig,
         maintenanceMode,
         systemMessage,
+      };
+
+      // 2. Calculate the Diff (What changed?)
+      const oldData = lastServerState.current || {};
+      const changes = [];
+
+      // A. Check Global Settings
+      if (oldData.systemMessage !== systemMessage) {
+        changes.push(`Updated System Message: "${oldData.systemMessage || ''}" → "${systemMessage}"`);
+      }
+      if (!!oldData.maintenanceMode !== !!maintenanceMode) {
+        changes.push(`Global Maintenance: ${maintenanceMode ? "ENABLED" : "DISABLED"}`);
+      }
+
+      // B. Check Game-Specific Settings
+      Object.keys(gamesConfig).forEach(gameId => {
+        const oldGame = oldData[gameId] || {};
+        const newGame = gamesConfig[gameId] || {};
+        
+        // Find readable title
+        const gameMeta = KNOWN_GAMES.find(g => g.id == gameId);
+        const title = gameMeta ? gameMeta.title : `Game #${gameId}`;
+
+        // Check Toggles
+        const toggleFields = ["visible", "isFeatured", "isNew", "isHot", "isUpcoming", "maintenance"];
+        toggleFields.forEach(field => {
+          if (!!oldGame[field] !== !!newGame[field]) {
+            changes.push(`${title}: ${field.toUpperCase()} ${newGame[field] ? "ON" : "OFF"}`);
+          }
+        });
+
+        // Check Boost (Popularity)
+        // Only log if value actually changed (ignore type diffs "0" vs 0)
+        if (parseInt(oldGame.popularity || 0) !== parseInt(newGame.popularity || 0)) {
+           changes.push(`${title}: Boost changed ${oldGame.popularity || 0} → ${newGame.popularity || 0}`);
+        }
       });
-      await logAdminAction("System Update", "Saved global config changes");
+
+      // 3. Write to Firestore
+      await setDoc(doc(db, "game_hub_settings", "config"), newData);
+
+      // 4. Log to Audit Trail (If there were changes)
+      if (changes.length > 0) {
+        // Join changes into a clean string, truncate if too long
+        const changeSummary = changes.join(", ");
+        await logAdminAction("Configuration Save", changeSummary);
+      } else {
+        console.log("Save pressed, but no changes detected.");
+      }
+
       alert("System Updated Successfully!");
     } catch (err) {
       alert("Save failed: " + err.message);
     }
   };
 
+  // --- UI HANDLERS (No Logging - just state updates) ---
   const handleGameToggle = (id, field) => {
-    // 1. Get the current state before toggling
-    const currentConfig = gamesConfig[id] || {};
-    const newValue = !currentConfig[field]; // What it will become
-    
-    // 2. Get readable game name
-    const game = KNOWN_GAMES.find(g => g.id === id);
-    const gameTitle = game ? game.title : `Game ID ${id}`;
-
-    // 3. Update State
     setGamesConfig((prev) => ({
       ...prev,
-      [id]: { ...prev[id], [field]: newValue },
+      [id]: { ...prev[id], [field]: !prev[id]?.[field] },
     }));
-
-    // 4. Log the specific action
-    // "Enabled Maintenance for Angry Virus" or "Disabled Visible for Pirates"
-    const actionType = newValue ? "Enabled" : "Disabled";
-    const fieldName = field.charAt(0).toUpperCase() + field.slice(1); // Capitalize "maintenance" -> "Maintenance"
-    
-    logAdminAction("Game Toggle", `${actionType} ${fieldName} for ${gameTitle}`);
+    // Note: Logging removed here. It happens on Save now.
   };
 
   const exportCSV = () => {
@@ -318,7 +360,7 @@ const AdminPanel = () => {
     });
 
     setGamesConfig(newConfig);
-    logAdminAction("Bulk Update", `Set ${field} to ${targetValue} for ${selectedIds.length} games`);
+    // Note: Logging removed here. It happens on Save now.
   };
 
   // --- COMPUTED DATA FOR CHARTS ---
@@ -337,30 +379,23 @@ const AdminPanel = () => {
   const chartData = useMemo(() => {
     const dateCount = {};
     const categoryCount = {};
-    const recentGameCount = {}; 
+    const recentGameCount = {};
 
-    // 1. Process Logs (Timeline, Categories, Recent Games)
     filteredLogs
       .slice()
       .reverse()
       .forEach((log) => {
-        // Date
         const date = new Date(log.timestamp.seconds * 1000).toLocaleDateString(
           undefined,
           { month: "short", day: "numeric" }
         );
         dateCount[date] = (dateCount[date] || 0) + 1;
-
-        // Category
         const cat = log.category || "Other";
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
-
-        // Recent Game (from Logs)
         const gameTitle = log.gameTitle || "Unknown";
         recentGameCount[gameTitle] = (recentGameCount[gameTitle] || 0) + 1;
       });
 
-    // 2. Process Game Stats (Total Organic Clicks - All Time)
     const organicData = KNOWN_GAMES.map((game) => ({
       name: game.title,
       value: gameStats[game.id] || 0,
@@ -368,7 +403,6 @@ const AdminPanel = () => {
       .filter((item) => item.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    // 3. Process Recent Games (Top 5)
     const recentGamesData = Object.keys(recentGameCount)
       .map((k) => ({ name: k, value: recentGameCount[k] }))
       .sort((a, b) => b.value - a.value)
@@ -388,7 +422,6 @@ const AdminPanel = () => {
     };
   }, [filteredLogs, gameStats]);
 
-  // --- LOGIN SCREEN ---
   if (!user)
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
@@ -641,7 +674,6 @@ const AdminPanel = () => {
 
               {/* 2x2 Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                {/* 1. TIMELINE */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.timeline}>
@@ -656,7 +688,6 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 2. CATEGORY DISTRIBUTION */}
                 <ChartCard title="Category Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -680,7 +711,6 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 3. RECENT TOP 5 */}
                 <ChartCard title="Top 5 Games (Selected Period)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -707,7 +737,6 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 4. TOTAL ORGANIC CLICKS */}
                 <ChartCard title="Total Organic Clicks (All Time)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -737,7 +766,7 @@ const AdminPanel = () => {
 
               {/* --- NEW VISUALIZATION SECTION --- */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-                {/* 1. World Map (Takes up 2 columns) */}
+                {/* 1. World Map */}
                 <div className="xl:col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
                   <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
                     <Globe size={14} /> Global Traffic Map
@@ -747,7 +776,7 @@ const AdminPanel = () => {
                   </div>
                 </div>
 
-                {/* 2. Heatmap (Takes up 1 column) */}
+                {/* 2. Heatmap */}
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
                   <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
                     <Clock size={14} /> Peak Activity Heatmap
@@ -930,10 +959,7 @@ const AdminPanel = () => {
                         Emergency:
                       </span>
                       <button
-                        onClick={() => {
-                          setMaintenanceMode(!maintenanceMode);
-                          logAdminAction("Emergency", `Toggled Maintenance Mode to ${!maintenanceMode}`);
-                        }}
+                        onClick={() => setMaintenanceMode(!maintenanceMode)}
                         className={`w-12 h-6 rounded-full p-1 transition-colors ${
                           maintenanceMode
                             ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
@@ -1058,7 +1084,6 @@ const AdminPanel = () => {
                                     isFeatured: true,
                                   };
                                   setGamesConfig(newConfig);
-                                  logAdminAction("Featured", `Set ${game.title} as Featured`);
                                 }}
                                 className="accent-emerald-500 w-4 h-4 cursor-pointer"
                               />
@@ -1124,7 +1149,7 @@ const AdminPanel = () => {
             </div>
           )}
 
-          {/* --- AUDIT LOGS VIEW (NEW) --- */}
+          {/* --- AUDIT LOGS VIEW --- */}
           {activeView === "security" && (
             <div className="space-y-6 max-w-7xl mx-auto pb-20">
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
@@ -1155,11 +1180,7 @@ const AdminPanel = () => {
                             {log.adminEmail}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              log.action.includes("Toggle") 
-                                ? "bg-blue-900/30 text-blue-400 border border-blue-800"
-                                : "bg-purple-900/30 text-purple-400 border border-purple-800"
-                            }`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400 border border-blue-800`}>
                               {log.action}
                             </span>
                           </td>
@@ -1256,7 +1277,10 @@ const Toggle = ({ checked, onChange, color }) => (
 
 const Checkbox = ({ checked, onChange, colorClass }) => (
   <div
-    onClick={() => onChange(!checked)}
+    onClick={(e) => {
+      e.stopPropagation();
+      onChange(!checked);
+    }}
     className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors mx-auto ${
       checked
         ? colorClass

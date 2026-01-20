@@ -283,27 +283,42 @@ const AdminPanel = () => {
   const chartData = useMemo(() => {
     const dateCount = {};
     const categoryCount = {};
-    const gameCount = {}; // <--- NEW: Track game clicks
+    const recentGameCount = {}; // For the "Top 5 Recent" chart
 
+    // 1. Process Logs (Timeline, Categories, Recent Games)
     filteredLogs
       .slice()
       .reverse()
       .forEach((log) => {
-        // 1. Date Logic
+        // Date
         const date = new Date(log.timestamp.seconds * 1000).toLocaleDateString(
           undefined,
           { month: "short", day: "numeric" }
         );
         dateCount[date] = (dateCount[date] || 0) + 1;
 
-        // 2. Category Logic
+        // Category
         const cat = log.category || "Other";
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
 
-        // 3. Game Logic <--- NEW
-        const game = log.gameTitle || "Unknown";
-        gameCount[game] = (gameCount[game] || 0) + 1;
+        // Recent Game (from Logs)
+        const gameTitle = log.gameTitle || "Unknown";
+        recentGameCount[gameTitle] = (recentGameCount[gameTitle] || 0) + 1;
       });
+
+    // 2. Process Game Stats (Total Organic Clicks - All Time)
+    const organicData = KNOWN_GAMES.map((game) => ({
+      name: game.title,
+      value: gameStats[game.id] || 0,
+    }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+
+    // 3. Process Recent Games (Top 5)
+    const recentGamesData = Object.keys(recentGameCount)
+      .map((k) => ({ name: k, value: recentGameCount[k] }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
 
     return {
       timeline: Object.keys(dateCount).map((k) => ({
@@ -314,16 +329,10 @@ const AdminPanel = () => {
         name: k,
         value: categoryCount[k],
       })),
-      // Sort by value (high to low) and take Top 5 to keep chart clean
-      games: Object.keys(gameCount)
-        .map((k) => ({
-          name: k,
-          value: gameCount[k],
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5), 
+      recentGames: recentGamesData, // Chart 1 (From previous request)
+      organic: organicData,         // Chart 2 (From this request)
     };
-  }, [filteredLogs]);
+  }, [filteredLogs, gameStats]);
 
   // --- LOGIN SCREEN ---
   if (!user)
@@ -560,120 +569,73 @@ const AdminPanel = () => {
                 />
               </div>
 
-              {/* Updated Grid to support 3 columns on XL screens */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {/* 2x2 Grid for 4 Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                 
                 {/* 1. TIMELINE */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.timeline}>
-                      <XAxis
-                        dataKey="date"
-                        stroke="#64748b"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #1e293b",
-                          borderRadius: "8px",
-                          color: "#fff",
-                        }}
-                        cursor={{ fill: "#1e293b" }}
-                      />
-                      <Bar
-                        dataKey="clicks"
-                        fill="#6366f1"
-                        radius={[4, 4, 0, 0]}
-                      />
+                      <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} cursor={{ fill: "#1e293b" }} />
+                      <Bar dataKey="clicks" fill="#6366f1" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 2. CATEGORY PIE */}
+                {/* 2. CATEGORY DISTRIBUTION */}
                 <ChartCard title="Category Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={chartData.categories}
-                        dataKey="value"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                      >
+                      <Pie data={chartData.categories} dataKey="value" innerRadius={60} outerRadius={80} paddingAngle={5}>
                         {chartData.categories.map((entry, index) => (
-                          <Cell
-                            key={`cell-cat-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                            stroke="#0f172a"
-                            strokeWidth={2}
-                          />
+                          <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #1e293b",
-                          borderRadius: "8px",
-                          color: "#fff",
-                        }}
-                      />
-                      <Legend
-                        iconType="circle"
-                        wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
-                      />
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 3. NEW: GAMES PIE */}
-                <ChartCard title="Top 5 Games">
+                {/* 3. RECENT TOP 5 (From Logs) */}
+                <ChartCard title="Top 5 Games (Selected Period)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={chartData.games}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        // Using a slightly different style (solid pie) to distinguish from categories
-                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value, index }) => {
-                           // Only show label if slice is big enough
-                           if(value < 1) return null; 
-                           return null; 
-                        }}
-                      >
-                        {chartData.games.map((entry, index) => (
-                          <Cell
-                            key={`cell-game-${index}`}
-                            // Reverse colors to make it look distinct from the category chart
-                            fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]}
-                            stroke="#0f172a"
-                            strokeWidth={2}
-                          />
+                      <Pie data={chartData.recentGames} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                        {chartData.recentGames.map((entry, index) => (
+                          <Cell key={`cell-recent-${index}`} fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid #1e293b",
-                          borderRadius: "8px",
-                          color: "#fff",
-                        }}
-                      />
-                      <Legend 
-                        layout="horizontal" 
-                        verticalAlign="bottom" 
-                        align="center"
-                        iconType="square"
-                        wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }}
-                      />
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
+                      <Legend iconType="square" wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
+
+                {/* 4. TOTAL ORGANIC CLICKS (All Time) */}
+                <ChartCard title="Total Organic Clicks (All Time)">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie 
+                        data={chartData.organic} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius={80}
+                        label={({ percent }) => (percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : null)}
+                      >
+                        {chartData.organic.map((entry, index) => (
+                          <Cell key={`cell-org-${index}`} fill={COLORS[(index + 3) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
+                      <Legend iconType="square" wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+
               </div>
 
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">

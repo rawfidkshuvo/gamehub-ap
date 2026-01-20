@@ -1256,7 +1256,10 @@ const ChartCard = ({ title, children }) => (
     <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
       <BarChart3 size={14} /> {title}
     </h3>
-    <div className="flex-1 min-h-0">{children}</div>
+    {/* The fix is here: w-full and h-full ensure the ResponsiveContainer has space to render */}
+    <div className="flex-1 w-full h-full min-h-0 relative">
+      {children}
+    </div>
   </div>
 );
 

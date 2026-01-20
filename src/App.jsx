@@ -240,12 +240,26 @@ const AdminPanel = () => {
   };
 
   const handleGameToggle = (id, field) => {
-    const gameTitle = gamesConfig[id]?.title || `ID ${id}`;
+    // 1. Get the current state before toggling
+    const currentConfig = gamesConfig[id] || {};
+    const newValue = !currentConfig[field]; // What it will become
+    
+    // 2. Get readable game name
+    const game = KNOWN_GAMES.find(g => g.id === id);
+    const gameTitle = game ? game.title : `Game ID ${id}`;
+
+    // 3. Update State
     setGamesConfig((prev) => ({
       ...prev,
-      [id]: { ...prev[id], [field]: !prev[id]?.[field] },
+      [id]: { ...prev[id], [field]: newValue },
     }));
-    logAdminAction("Game Toggle", `Toggled ${field} for ${gameTitle}`);
+
+    // 4. Log the specific action
+    // "Enabled Maintenance for Angry Virus" or "Disabled Visible for Pirates"
+    const actionType = newValue ? "Enabled" : "Disabled";
+    const fieldName = field.charAt(0).toUpperCase() + field.slice(1); // Capitalize "maintenance" -> "Maintenance"
+    
+    logAdminAction("Game Toggle", `${actionType} ${fieldName} for ${gameTitle}`);
   };
 
   const exportCSV = () => {

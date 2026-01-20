@@ -126,7 +126,7 @@ const AdminPanel = () => {
   const [systemMessage, setSystemMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Change Tracking State (To compare "Draft" vs "Server")
+  // Change Tracking State
   const lastServerState = useRef(null);
 
   // Bulk Action State
@@ -175,13 +175,11 @@ const AdminPanel = () => {
       (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          // Set UI State
           setMaintenanceMode(data.maintenanceMode || false);
           setSystemMessage(data.systemMessage || "");
           const { maintenanceMode, systemMessage, ...games } = data;
           setGamesConfig(games);
 
-          // Store a copy of the server state for "Diffing" later
           lastServerState.current = JSON.parse(JSON.stringify(data));
         }
       }
@@ -231,21 +229,19 @@ const AdminPanel = () => {
   }, [user, dateRange]);
 
 
-  // --- SAVE ACTIONS (WITH DIFF LOGIC) ---
+  // --- SAVE ACTIONS ---
   const saveChanges = async () => {
     try {
-      // 1. Prepare the Data for Firestore
       const newData = {
         ...gamesConfig,
         maintenanceMode,
         systemMessage,
       };
 
-      // 2. Calculate the Diff (What changed?)
       const oldData = lastServerState.current || {};
       const changes = [];
 
-      // A. Check Global Settings
+      // Check Global Settings
       if (oldData.systemMessage !== systemMessage) {
         changes.push(`Updated System Message: "${oldData.systemMessage || ''}" → "${systemMessage}"`);
       }
@@ -253,16 +249,14 @@ const AdminPanel = () => {
         changes.push(`Global Maintenance: ${maintenanceMode ? "ENABLED" : "DISABLED"}`);
       }
 
-      // B. Check Game-Specific Settings
+      // Check Game-Specific Settings
       Object.keys(gamesConfig).forEach(gameId => {
         const oldGame = oldData[gameId] || {};
         const newGame = gamesConfig[gameId] || {};
         
-        // Find readable title
         const gameMeta = KNOWN_GAMES.find(g => g.id == gameId);
         const title = gameMeta ? gameMeta.title : `Game #${gameId}`;
 
-        // Check Toggles
         const toggleFields = ["visible", "isFeatured", "isNew", "isHot", "isUpcoming", "maintenance"];
         toggleFields.forEach(field => {
           if (!!oldGame[field] !== !!newGame[field]) {
@@ -270,19 +264,14 @@ const AdminPanel = () => {
           }
         });
 
-        // Check Boost (Popularity)
-        // Only log if value actually changed (ignore type diffs "0" vs 0)
         if (parseInt(oldGame.popularity || 0) !== parseInt(newGame.popularity || 0)) {
            changes.push(`${title}: Boost changed ${oldGame.popularity || 0} → ${newGame.popularity || 0}`);
         }
       });
 
-      // 3. Write to Firestore
       await setDoc(doc(db, "game_hub_settings", "config"), newData);
 
-      // 4. Log to Audit Trail (If there were changes)
       if (changes.length > 0) {
-        // Join changes into a clean string, truncate if too long
         const changeSummary = changes.join(", ");
         await logAdminAction("Configuration Save", changeSummary);
       } else {
@@ -295,13 +284,11 @@ const AdminPanel = () => {
     }
   };
 
-  // --- UI HANDLERS (No Logging - just state updates) ---
   const handleGameToggle = (id, field) => {
     setGamesConfig((prev) => ({
       ...prev,
       [id]: { ...prev[id], [field]: !prev[id]?.[field] },
     }));
-    // Note: Logging removed here. It happens on Save now.
   };
 
   const exportCSV = () => {
@@ -324,7 +311,7 @@ const AdminPanel = () => {
     document.body.removeChild(link);
   };
 
-  // --- BULK ACTIONS LOGIC ---
+  // --- BULK ACTIONS ---
   const filteredGameList = KNOWN_GAMES.filter(
     (g) =>
       g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -360,10 +347,9 @@ const AdminPanel = () => {
     });
 
     setGamesConfig(newConfig);
-    // Note: Logging removed here. It happens on Save now.
   };
 
-  // --- COMPUTED DATA FOR CHARTS ---
+  // --- COMPUTED DATA ---
   const filteredLogs = useMemo(() => {
     const now = new Date();
     const cutoff = new Date();
@@ -675,7 +661,8 @@ const AdminPanel = () => {
               {/* 2x2 Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                 <ChartCard title="Click Timeline">
-                  <ResponsiveContainer width="100%" height="100%">
+                  {/* ADDED debounce to wait for layout */}
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <BarChart data={chartData.timeline}>
                       <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                       <Tooltip 
@@ -689,7 +676,7 @@ const AdminPanel = () => {
                 </ChartCard>
 
                 <ChartCard title="Category Distribution">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 
                         data={chartData.categories} 
@@ -712,7 +699,7 @@ const AdminPanel = () => {
                 </ChartCard>
 
                 <ChartCard title="Top 5 Games (Selected Period)">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 
                         data={chartData.recentGames} 
@@ -738,7 +725,7 @@ const AdminPanel = () => {
                 </ChartCard>
 
                 <ChartCard title="Total Organic Clicks (All Time)">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 
                         data={chartData.organic} 
@@ -1251,18 +1238,19 @@ const StatCard = ({ label, value, icon, subtext }) => (
   </div>
 );
 
+// --- FIXED CHART CARD ---
 const ChartCard = ({ title, children }) => (
-  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg">
-    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
+  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-80 flex flex-col">
+    <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2 shrink-0">
       <BarChart3 size={14} /> {title}
     </h3>
-    
-    {/* FIX: Changed from "flex-1" to strict "h-64" (256px).
-       This guarantees the container has a valid height immediately,
-       solving the width(-1) error.
+    {/* FIX: Use absolute positioning trick to break flexbox sizing dependency.
+       This forces dimensions to be valid immediately, preventing width(-1) errors.
     */}
-    <div className="h-64 w-full relative">
-      {children}
+    <div className="flex-1 w-full min-h-0 relative">
+      <div className="absolute inset-0">
+        {children}
+      </div>
     </div>
   </div>
 );

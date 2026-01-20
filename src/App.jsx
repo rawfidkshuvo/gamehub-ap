@@ -142,40 +142,44 @@ const AdminPanel = () => {
     }
   };
 
-  // --- DATA SYNC ---
+  // --- UPDATED DATA SYNC ---
   useEffect(() => {
     if (!user) return;
 
-    // 1. Config
-    const unsubConfig = onSnapshot(
-      doc(db, "game_hub_settings", "config"),
-      (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
-          setMaintenanceMode(data.maintenanceMode || false);
-          setSystemMessage(data.systemMessage || "");
-          const { maintenanceMode, systemMessage, ...games } = data;
-          setGamesConfig(games);
-        }
+    // 1. Config (Unchanged)
+    const unsubConfig = onSnapshot(doc(db, "game_hub_settings", "config"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setMaintenanceMode(data.maintenanceMode || false);
+        setSystemMessage(data.systemMessage || "");
+        const { maintenanceMode, systemMessage, ...games } = data;
+        setGamesConfig(games);
       }
-    );
+    });
 
-    // 2. Stats
+    // 2. Stats (Unchanged)
     const unsubStats = onSnapshot(collection(db, "game_stats"), (snap) => {
       const stats = {};
       snap.docs.forEach(
-        (d) =>
-          (stats[parseInt(d.id.replace("game_", ""))] = d.data().clicks || 0)
+        (d) => (stats[parseInt(d.id.replace("game_", ""))] = d.data().clicks || 0)
       );
       setGameStats(stats);
     });
 
-    // 3. Logs
+    // 3. Logs (UPDATED: Dynamic Limit based on Timeframe)
+    // We calculate a limit based on the selected range to ensure we get enough data
+    // 24H = 500, 7D = 1000, 30D+ = 5000 (Adjust these numbers based on your traffic)
+    let logLimit = 500; 
+    const days = parseInt(dateRange);
+    if (days > 1) logLimit = 2000;
+    if (days > 30) logLimit = 5000;
+
     const q = query(
       collection(db, "game_click_logs"),
       orderBy("timestamp", "desc"),
-      limit(500)
+      limit(logLimit) // <--- Now this scales with your selection
     );
+
     const unsubLogs = onSnapshot(q, (snap) => {
       setActivityLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
@@ -185,7 +189,7 @@ const AdminPanel = () => {
       unsubStats();
       unsubLogs();
     };
-  }, [user]);
+  }, [user, dateRange]); // <--- IMPORTANT: Added dateRange to dependency array
 
   // --- ACTIONS ---
   const saveChanges = async () => {

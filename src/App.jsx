@@ -572,7 +572,7 @@ const AdminPanel = () => {
               {/* 2x2 Grid for 4 Charts */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                 
-                {/* 1. TIMELINE */}
+                {/* 1. TIMELINE (Bar Chart - Unchanged) */}
                 <ChartCard title="Click Timeline">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData.timeline}>
@@ -583,11 +583,17 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 2. CATEGORY DISTRIBUTION */}
+                {/* 2. CATEGORY DISTRIBUTION (The Reference Style) */}
                 <ChartCard title="Category Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={chartData.categories} dataKey="value" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                      <Pie 
+                        data={chartData.categories} 
+                        dataKey="value" 
+                        innerRadius={60} 
+                        outerRadius={80} 
+                        paddingAngle={5}
+                      >
                         {chartData.categories.map((entry, index) => (
                           <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
@@ -598,22 +604,31 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 3. RECENT TOP 5 (From Logs) */}
+                {/* 3. RECENT TOP 5 (Now matches Category Style) */}
                 <ChartCard title="Top 5 Games (Selected Period)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={chartData.recentGames} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                      <Pie 
+                        data={chartData.recentGames} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        innerRadius={60} // Added donut hole
+                        outerRadius={80} 
+                        paddingAngle={5} // Added spacing
+                      >
                         {chartData.recentGames.map((entry, index) => (
                           <Cell key={`cell-recent-${index}`} fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
-                      <Legend iconType="square" wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                {/* 4. TOTAL ORGANIC CLICKS (All Time) */}
+                {/* 4. TOTAL ORGANIC CLICKS (Now matches Category Style) */}
                 <ChartCard title="Total Organic Clicks (All Time)">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -623,15 +638,17 @@ const AdminPanel = () => {
                         nameKey="name" 
                         cx="50%" 
                         cy="50%" 
-                        outerRadius={80}
-                        label={({ percent }) => (percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : null)}
+                        innerRadius={60} // Added donut hole
+                        outerRadius={80} 
+                        paddingAngle={5} // Added spacing
                       >
                         {chartData.organic.map((entry, index) => (
                           <Cell key={`cell-org-${index}`} fill={COLORS[(index + 3) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#fff" }} />
-                      <Legend iconType="square" wrapperStyle={{ fontSize: "10px", paddingTop: "10px" }} />
+                      {/* Removed the on-chart text labels to keep the clean donut look */}
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>

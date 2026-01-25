@@ -57,7 +57,6 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { scaleLinear } from "d3-scale";
 
 // --- STATIC GAME DATA ---
@@ -412,7 +411,7 @@ const AdminPanel = () => {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl w-full max-w-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500" />
           <div className="text-center mb-8">
             <div className="inline-flex p-4 bg-slate-800 rounded-full mb-4 shadow-inner">
               <Lock className="w-8 h-8 text-indigo-400" />
@@ -497,7 +496,7 @@ const AdminPanel = () => {
               <Terminal size={12} /> Live Feed
             </div>
             <div className="mx-2 bg-slate-950 rounded-lg border border-slate-800 p-3 h-48 overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-slate-950 to-transparent z-10" />
+              <div className="absolute top-0 left-0 w-full h-8 bg-linear-to-b from-slate-950 to-transparent z-10" />
               <div className="space-y-3 text-xs font-mono">
                 {activityLogs.slice(0, 6).map((log) => (
                   <div
@@ -516,7 +515,7 @@ const AdminPanel = () => {
                   </div>
                 ))}
               </div>
-              <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-slate-950 to-transparent z-10" />
+              <div className="absolute bottom-0 left-0 w-full h-8 bg-linear-to-t from-slate-950 to-transparent z-10" />
             </div>
           </div>
         </nav>
@@ -582,7 +581,7 @@ const AdminPanel = () => {
           {/* --- DASHBOARD VIEW --- */}
           {activeView === "dashboard" && (
             <div className="space-y-6 max-w-7xl mx-auto pb-20">
-              <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row items-center gap-4 shadow-lg">
+              <div className="bg-linear-to-r from-slate-900 to-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row items-center gap-4 shadow-lg">
                 <div className="p-3 bg-indigo-500/20 rounded-lg text-indigo-400">
                   <Megaphone size={24} />
                 </div>
@@ -753,15 +752,7 @@ const AdminPanel = () => {
 
               {/* --- NEW VISUALIZATION SECTION --- */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-                {/* 1. World Map */}
-                <div className="xl:col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
-                  <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
-                    <Globe size={14} /> Global Traffic Map
-                  </h3>
-                  <div className="flex-1 rounded-lg border border-slate-800 overflow-hidden relative">
-                    <WorldMapWidget data={filteredLogs} />
-                  </div>
-                </div>
+                
 
                 {/* 2. Heatmap */}
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
@@ -1286,66 +1277,7 @@ const Checkbox = ({ checked, onChange, colorClass }) => (
   </div>
 );
 
-const WorldMapWidget = ({ data }) => {
-  const countryData = useMemo(() => {
-    const counts = {};
-    data.forEach((log) => {
-      const country = log.country || "Unknown";
-      counts[country] = (counts[country] || 0) + 1;
-    });
-    return counts;
-  }, [data]);
 
-  const colorScale = scaleLinear()
-    .domain([0, Math.max(...Object.values(countryData), 1)])
-    .range(["#1e293b", "#6366f1"]); 
-
-  return (
-    <div className="w-full h-full bg-slate-950 rounded-xl overflow-hidden relative">
-      <ComposableMap
-        projectionConfig={{ scale: 140 }}
-        style={{ width: "100%", height: "100%" }}
-      >
-        <ZoomableGroup>
-          <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
-            {({ geographies }) =>
-              geographies.map((geo) => {
-                const countryName = geo.properties.name;
-                const clicks = countryData[countryName] || 0;
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={clicks > 0 ? colorScale(clicks) : "#334155"}
-                    stroke="#0f172a"
-                    strokeWidth={0.5}
-                    style={{
-                      default: { outline: "none" },
-                      hover: { fill: "#f472b6", outline: "none", cursor: "pointer" },
-                      pressed: { outline: "none" },
-                    }}
-                  />
-                );
-              })
-            }
-          </Geographies>
-        </ZoomableGroup>
-      </ComposableMap>
-      <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur p-3 rounded-lg border border-slate-800 text-xs text-slate-300 pointer-events-none">
-        <div className="font-bold text-white mb-1">Top Regions</div>
-        {Object.entries(countryData)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 3)
-          .map(([name, count]) => (
-            <div key={name} className="flex justify-between gap-4">
-              <span>{name}</span>
-              <span className="text-indigo-400">{count}</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-};
 
 const UsageHeatmap = ({ data }) => {
   const heatmap = useMemo(() => {

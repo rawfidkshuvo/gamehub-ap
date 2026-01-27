@@ -673,10 +673,10 @@ const AdminPanel = () => {
                       <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#f8fafc" }} 
-                        itemStyle={{ color: "#f8fafc" }}
+                        itemStyle={{ color: "#ec4899" }}
                         cursor={{ fill: "#1e293b" }} 
                       />
-                      <Bar dataKey="clicks" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="clicks" fill="#ec4899" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
@@ -697,7 +697,7 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }}
+                        itemStyle={{ color: "#ec4899" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
@@ -723,7 +723,7 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }}
+                        itemStyle={{ color: "#ec4899" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
@@ -749,7 +749,7 @@ const AdminPanel = () => {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
-                        itemStyle={{ color: "#e2e8f0" }}
+                        itemStyle={{ color: "#ec4899" }}
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
                     </PieChart>
@@ -1287,10 +1287,25 @@ const Checkbox = ({ checked, onChange, colorClass }) => (
 
 
 const UsageHeatmap = ({ data }) => {
+  const [selectedCell, setSelectedCell] = useState(null);
+  const containerRef = useRef(null);
+
+  // Close tooltip when clicking outside the grid
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setSelectedCell(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const heatmap = useMemo(() => {
     const grid = Array(7).fill(0).map(() => Array(24).fill(0));
     let max = 0;
     data.forEach(log => {
+      if (!log.timestamp) return;
       const d = new Date(log.timestamp.seconds * 1000);
       const day = d.getDay();
       const hour = d.getHours();
@@ -1303,7 +1318,10 @@ const UsageHeatmap = ({ data }) => {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div className="flex flex-col h-full overflow-x-auto">
+    <div 
+      ref={containerRef}
+      className="flex flex-col h-full overflow-x-auto select-none pb-2"
+    >
       <div className="flex">
         <div className="w-10 shrink-0"></div>
         <div className="flex-1 grid grid-cols-24 mb-2">
@@ -1314,29 +1332,61 @@ const UsageHeatmap = ({ data }) => {
           ))}
         </div>
       </div>
-      <div className="flex-1 flex flex-col justify-between">
+
+      <div className="flex-1 flex flex-col justify-between min-h-[180px]">
         {heatmap.grid.map((row, dayIdx) => (
           <div key={dayIdx} className="flex items-center h-8">
             <div className="w-10 shrink-0 text-[10px] text-slate-400 font-bold">{days[dayIdx]}</div>
             <div className="flex-1 grid grid-cols-24 gap-[2px] h-full">
-              {row.map((val, hourIdx) => (
-                <div
-                  key={hourIdx}
-                  className="rounded-sm transition-all hover:ring-1 ring-white/50 relative group"
-                  style={{
-                    backgroundColor: val > 0 ? `rgba(99, 102, 241, ${Math.max(0.15, val / (heatmap.max || 1))})` : '#1e293b'
-                  }}
-                >
-                  {val > 0 && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-900 text-white text-[10px] px-2 py-1 rounded border border-slate-700 whitespace-nowrap z-50">
-                      {val} clicks at {hourIdx}:00
-                    </div>
-                  )}
-                </div>
-              ))}
+              {row.map((val, hourIdx) => {
+                const isSelected = selectedCell?.day === dayIdx && selectedCell?.hour === hourIdx;
+                
+                return (
+                  <div
+                    key={hourIdx}
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevents immediate deselect
+                      setSelectedCell(isSelected ? null : { day: dayIdx, hour: hourIdx });
+                    }}
+                    className={`rounded-sm transition-all relative cursor-pointer
+                      ${isSelected ? 'ring-2 ring-white z-30 scale-110 shadow-lg' : 'hover:ring-1 ring-pink-400 z-10'}
+                    `}
+                    style={{
+                      backgroundColor: val > 0 
+                        ? `rgba(236, 72, 153, ${Math.max(0.15, val / (heatmap.max || 1))})` 
+                        : '#1e293b'
+                    }}
+                  >
+                    {val > 0 && (
+                      <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 
+                        bg-slate-900 text-white text-[10px] px-2 py-1.5 rounded-md border border-pink-500 
+                        shadow-2xl pointer-events-none whitespace-nowrap
+                        ${isSelected ? 'block animate-in fade-in zoom-in-95 duration-100' : 'hidden md:group-hover:block'}
+                      `}>
+                        <span className="font-bold text-pink-400">{val}</span> clicks @ {hourIdx}:00
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
+      </div>
+      
+      {/* Mobile Hint & Selection Clearer */}
+      <div className="mt-4 flex justify-between items-center px-2">
+        <p className="text-[10px] text-slate-600 italic md:hidden">
+          {selectedCell ? "Tap again to close" : "Tap squares for details"}
+        </p>
+        {selectedCell && (
+          <button 
+            onClick={() => setSelectedCell(null)}
+            className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 md:hidden"
+          >
+            Clear
+          </button>
+        )}
       </div>
     </div>
   );

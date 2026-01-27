@@ -365,6 +365,7 @@ const AdminPanel = () => {
     const dateCount = {};
     const categoryCount = {};
     const recentGameCount = {};
+    const periodOrganicCount = {}; // New counter for the selected period
 
     filteredLogs
       .slice()
@@ -379,11 +380,17 @@ const AdminPanel = () => {
         categoryCount[cat] = (categoryCount[cat] || 0) + 1;
         const gameTitle = log.gameTitle || "Unknown";
         recentGameCount[gameTitle] = (recentGameCount[gameTitle] || 0) + 1;
+        // Track clicks per game ID for the organic chart within this period
+        const gameId = log.gameId; 
+        if (gameId) {
+          periodOrganicCount[gameId] = (periodOrganicCount[gameId] || 0) + 1;
+        }
       });
 
+    // Map the period-specific counts back to the known games list
     const organicData = KNOWN_GAMES.map((game) => ({
       name: game.title,
-      value: gameStats[game.id] || 0,
+      value: periodOrganicCount[game.id] || 0, // Use the local period count
     }))
       .filter((item) => item.value > 0)
       .sort((a, b) => b.value - a.value);
@@ -405,7 +412,7 @@ const AdminPanel = () => {
       recentGames: recentGamesData,
       organic: organicData,
     };
-  }, [filteredLogs, gameStats]);
+  }, [filteredLogs]);
 
   if (!user)
     return (
@@ -659,7 +666,7 @@ const AdminPanel = () => {
 
               {/* 2x2 Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                <ChartCard title="Click Timeline">
+                <ChartCard title={`Activity (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
                   {/* ADDED debounce to wait for layout */}
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <BarChart data={chartData.timeline}>
@@ -674,7 +681,7 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Category Distribution">
+                <ChartCard title={`popular categories (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 
@@ -697,7 +704,7 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Top 5 Games (Selected Period)">
+                <ChartCard title={`Top 5 games (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 
@@ -723,7 +730,7 @@ const AdminPanel = () => {
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Total Organic Clicks (All Time)">
+                <ChartCard title={`Game popularity (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
                       <Pie 

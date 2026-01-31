@@ -1293,7 +1293,10 @@ const UsageHeatmap = ({ data }) => {
   // Close tooltip when clicking outside the grid
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
         setSelectedCell(null);
       }
     };
@@ -1302,9 +1305,11 @@ const UsageHeatmap = ({ data }) => {
   }, []);
 
   const heatmap = useMemo(() => {
-    const grid = Array(7).fill(0).map(() => Array(24).fill(0));
+    const grid = Array(7)
+      .fill(0)
+      .map(() => Array(24).fill(0));
     let max = 0;
-    data.forEach(log => {
+    data.forEach((log) => {
       if (!log.timestamp) return;
       const d = new Date(log.timestamp.seconds * 1000);
       const day = d.getDay();
@@ -1318,52 +1323,90 @@ const UsageHeatmap = ({ data }) => {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="flex flex-col h-full overflow-x-auto select-none pb-2"
+      className="flex flex-col h-full overflow-x-auto select-none pb-2 relative"
     >
       <div className="flex">
         <div className="w-10 shrink-0"></div>
         <div className="flex-1 grid grid-cols-24 mb-2">
-          {Array(24).fill(0).map((_, i) => (
-            <div key={i} className="text-[9px] text-slate-500 text-center border-l border-slate-800/50">
-              {i % 3 === 0 ? i : ""}
-            </div>
-          ))}
+          {Array(24)
+            .fill(0)
+            .map((_, i) => (
+              <div
+                key={i}
+                className="text-[9px] text-slate-500 text-center border-l border-slate-800/50"
+              >
+                {i % 3 === 0 ? i : ""}
+              </div>
+            ))}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col justify-between min-h-[180px]">
         {heatmap.grid.map((row, dayIdx) => (
           <div key={dayIdx} className="flex items-center h-8">
-            <div className="w-10 shrink-0 text-[10px] text-slate-400 font-bold">{days[dayIdx]}</div>
+            <div className="w-10 shrink-0 text-[10px] text-slate-400 font-bold">
+              {days[dayIdx]}
+            </div>
             <div className="flex-1 grid grid-cols-24 gap-[2px] h-full">
               {row.map((val, hourIdx) => {
-                const isSelected = selectedCell?.day === dayIdx && selectedCell?.hour === hourIdx;
+                const isSelected =
+                  selectedCell?.day === dayIdx &&
+                  selectedCell?.hour === hourIdx;
                 
+                // --- FIX STARTS HERE ---
+                // If we are in the first 2 rows (Sun/Mon), show tooltip BELOW.
+                // Otherwise show it ABOVE.
+                const isTopRows = dayIdx < 2;
+                // --- FIX ENDS HERE ---
+
                 return (
                   <div
                     key={hourIdx}
                     onClick={(e) => {
-                      e.stopPropagation(); // Prevents immediate deselect
-                      setSelectedCell(isSelected ? null : { day: dayIdx, hour: hourIdx });
+                      e.stopPropagation();
+                      setSelectedCell(
+                        isSelected ? null : { day: dayIdx, hour: hourIdx }
+                      );
                     }}
                     className={`rounded-sm transition-all relative cursor-pointer
-                      ${isSelected ? 'ring-2 ring-white z-30 scale-110 shadow-lg' : 'hover:ring-1 ring-pink-400 z-10'}
+                      ${
+                        isSelected
+                          ? "ring-2 ring-white z-30 scale-110 shadow-lg"
+                          : "hover:ring-1 ring-pink-400 z-10"
+                      }
                     `}
                     style={{
-                      backgroundColor: val > 0 
-                        ? `rgba(236, 72, 153, ${Math.max(0.15, val / (heatmap.max || 1))})` 
-                        : '#1e293b'
+                      backgroundColor:
+                        val > 0
+                          ? `rgba(236, 72, 153, ${Math.max(
+                              0.15,
+                              val / (heatmap.max || 1)
+                            )})`
+                          : "#1e293b",
                     }}
                   >
                     {val > 0 && (
-                      <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 
+                      <div
+                        className={`absolute left-1/2 -translate-x-1/2 
                         bg-slate-900 text-white text-[10px] px-2 py-1.5 rounded-md border border-pink-500 
-                        shadow-2xl pointer-events-none whitespace-nowrap
-                        ${isSelected ? 'block animate-in fade-in zoom-in-95 duration-100' : 'hidden md:group-hover:block'}
-                      `}>
-                        <span className="font-bold text-pink-400">{val}</span> clicks @ {hourIdx}:00
+                        shadow-2xl pointer-events-none whitespace-nowrap z-50
+                        ${
+                          // Apply conditional positioning class
+                          isTopRows 
+                            ? "top-full mt-2" // Render below
+                            : "bottom-full mb-2" // Render above (default)
+                        }
+                        ${
+                          isSelected
+                            ? "block animate-in fade-in zoom-in-95 duration-100"
+                            : "hidden md:group-hover:block"
+                        }
+                      `}
+                      >
+                        <span className="font-bold text-pink-400">{val}</span>{" "}
+                        clicks @ {hourIdx}:00
                       </div>
                     )}
                   </div>
@@ -1373,14 +1416,16 @@ const UsageHeatmap = ({ data }) => {
           </div>
         ))}
       </div>
-      
+
       {/* Mobile Hint & Selection Clearer */}
       <div className="mt-4 flex justify-between items-center px-2">
         <p className="text-[10px] text-slate-600 italic md:hidden">
-          {selectedCell ? "Tap again to close" : "Tap squares for details"}
+          {selectedCell
+            ? "Tap again to close"
+            : "Tap squares for details"}
         </p>
         {selectedCell && (
-          <button 
+          <button
             onClick={() => setSelectedCell(null)}
             className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 md:hidden"
           >

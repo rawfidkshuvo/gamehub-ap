@@ -69,6 +69,7 @@ const KNOWN_GAMES = [
   { id: 6, title: "Fruit Seller" },
   { id: 7, title: "Ghost Dice" },
   { id: 8, title: "Protocol: Sabotage" },
+  { id: 9, title: "Equilibrium" },
   { id: 10, title: "Neon Draft" },
   { id: 12, title: "Contraband" },
   { id: 15, title: "Guild of Shadows" },

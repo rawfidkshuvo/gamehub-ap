@@ -93,7 +93,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig, "Admin-Panel");
 const auth = getAuth(app);
 const db = getFirestore(app);
 

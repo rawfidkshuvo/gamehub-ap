@@ -71,16 +71,16 @@ const KNOWN_GAMES = [
   { id: 8, title: "Protocol: Sabotage" },
   { id: 9, title: "Equilibrium" },
   { id: 10, title: "Neon Draft" },
+  { id: 11, title: "Angry Virus" },
   { id: 12, title: "Contraband" },
+  { id: 13, title: "Last of Us" },
+  { id: 14, title: "Together" },
   { id: 15, title: "Guild of Shadows" },
+  { id: 16, title: "Spectrum" },
   { id: 17, title: "Masquerade Protocol" },
   { id: 18, title: "Paper Oceans" },
   { id: 19, title: "Royal Menagerie" },
   { id: 20, title: "Fructose Fury" },
-  { id: 21, title: "Angry Virus" },
-  { id: 22, title: "Last of Us" },
-  { id: 23, title: "Together" },
-  { id: 24, title: "Spectrum" },
 ];
 
 // --- FIREBASE CONFIGURATION ---

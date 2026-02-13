@@ -90,7 +90,7 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig, "Admin-Panel");
@@ -182,14 +182,15 @@ const AdminPanel = () => {
 
           lastServerState.current = JSON.parse(JSON.stringify(data));
         }
-      }
+      },
     );
 
     // 2. Stats
     const unsubStats = onSnapshot(collection(db, "game_stats"), (snap) => {
       const stats = {};
       snap.docs.forEach(
-        (d) => (stats[parseInt(d.id.replace("game_", ""))] = d.data().clicks || 0)
+        (d) =>
+          (stats[parseInt(d.id.replace("game_", ""))] = d.data().clicks || 0),
       );
       setGameStats(stats);
     });
@@ -204,7 +205,7 @@ const AdminPanel = () => {
     const q = query(
       collection(db, "game_click_logs"),
       orderBy("timestamp", "desc"),
-      limit(logLimit)
+      limit(logLimit),
     );
     const unsubLogs = onSnapshot(q, (snap) => {
       setActivityLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -214,7 +215,7 @@ const AdminPanel = () => {
     const auditQ = query(
       collection(db, "admin_audit_logs"),
       orderBy("timestamp", "desc"),
-      limit(100)
+      limit(100),
     );
     const unsubAudit = onSnapshot(auditQ, (snap) => {
       setAuditLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -227,7 +228,6 @@ const AdminPanel = () => {
       unsubAudit();
     };
   }, [user, dateRange]);
-
 
   // --- SAVE ACTIONS ---
   const saveChanges = async () => {
@@ -243,29 +243,47 @@ const AdminPanel = () => {
 
       // Check Global Settings
       if (oldData.systemMessage !== systemMessage) {
-        changes.push(`Updated System Message: "${oldData.systemMessage || ''}" → "${systemMessage}"`);
+        changes.push(
+          `Updated System Message: "${oldData.systemMessage || ""}" → "${systemMessage}"`,
+        );
       }
       if (!!oldData.maintenanceMode !== !!maintenanceMode) {
-        changes.push(`Global Maintenance: ${maintenanceMode ? "ENABLED" : "DISABLED"}`);
+        changes.push(
+          `Global Maintenance: ${maintenanceMode ? "ENABLED" : "DISABLED"}`,
+        );
       }
 
       // Check Game-Specific Settings
-      Object.keys(gamesConfig).forEach(gameId => {
+      Object.keys(gamesConfig).forEach((gameId) => {
         const oldGame = oldData[gameId] || {};
         const newGame = gamesConfig[gameId] || {};
-        
-        const gameMeta = KNOWN_GAMES.find(g => g.id == gameId);
+
+        const gameMeta = KNOWN_GAMES.find((g) => g.id == gameId);
         const title = gameMeta ? gameMeta.title : `Game #${gameId}`;
 
-        const toggleFields = ["visible", "isFeatured", "isNew", "isHot", "isUpcoming", "maintenance"];
-        toggleFields.forEach(field => {
+        const toggleFields = [
+          "visible",
+          "isFeatured",
+          "isNew",
+          "isHot",
+          "isUpcoming",
+          "maintenance",
+        ];
+        toggleFields.forEach((field) => {
           if (!!oldGame[field] !== !!newGame[field]) {
-            changes.push(`${title}: ${field.toUpperCase()} ${newGame[field] ? "ON" : "OFF"}`);
+            changes.push(
+              `${title}: ${field.toUpperCase()} ${newGame[field] ? "ON" : "OFF"}`,
+            );
           }
         });
 
-        if (parseInt(oldGame.popularity || 0) !== parseInt(newGame.popularity || 0)) {
-           changes.push(`${title}: Boost changed ${oldGame.popularity || 0} → ${newGame.popularity || 0}`);
+        if (
+          parseInt(oldGame.popularity || 0) !==
+          parseInt(newGame.popularity || 0)
+        ) {
+          changes.push(
+            `${title}: Boost changed ${oldGame.popularity || 0} → ${newGame.popularity || 0}`,
+          );
         }
       });
 
@@ -315,7 +333,7 @@ const AdminPanel = () => {
   const filteredGameList = KNOWN_GAMES.filter(
     (g) =>
       g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      g.id.toString().includes(searchTerm)
+      g.id.toString().includes(searchTerm),
   );
 
   const toggleSelectAll = () => {
@@ -374,7 +392,7 @@ const AdminPanel = () => {
       .forEach((log) => {
         const date = new Date(log.timestamp.seconds * 1000).toLocaleDateString(
           undefined,
-          { month: "short", day: "numeric" }
+          { month: "short", day: "numeric" },
         );
         dateCount[date] = (dateCount[date] || 0) + 1;
         const cat = log.category || "Other";
@@ -382,7 +400,7 @@ const AdminPanel = () => {
         const gameTitle = log.gameTitle || "Unknown";
         recentGameCount[gameTitle] = (recentGameCount[gameTitle] || 0) + 1;
         // Track clicks per game ID for the organic chart within this period
-        const gameId = log.gameId; 
+        const gameId = log.gameId;
         if (gameId) {
           periodOrganicCount[gameId] = (periodOrganicCount[gameId] || 0) + 1;
         }
@@ -516,7 +534,7 @@ const AdminPanel = () => {
                     <div className="text-slate-600 text-[10px] pl-4">
                       {log.timestamp
                         ? new Date(
-                            log.timestamp.seconds * 1000
+                            log.timestamp.seconds * 1000,
                           ).toLocaleTimeString()
                         : "Just now"}
                     </div>
@@ -655,10 +673,10 @@ const AdminPanel = () => {
                     (filteredLogs.filter(
                       (l) =>
                         l.deviceType === "Mobile" ||
-                        (l.device && l.device.toLowerCase().includes("mobile"))
+                        (l.device && l.device.toLowerCase().includes("mobile")),
                     ).length /
                       (filteredLogs.length || 1)) *
-                      100
+                      100,
                   )}%`}
                   icon={<Smartphone className="text-pink-400" />}
                   subtext="Device ratio"
@@ -667,92 +685,154 @@ const AdminPanel = () => {
 
               {/* 2x2 Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                <ChartCard title={`Activity (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
+                <ChartCard
+                  title={`Activity (${dateRange === "1" ? "Last 24H" : `Last ${dateRange} Days`})`}
+                >
                   {/* ADDED debounce to wait for layout */}
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <BarChart data={chartData.timeline}>
-                      <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", color: "#f8fafc" }} 
-                        itemStyle={{ color: "#ec4899" }}
-                        cursor={{ fill: "#1e293b" }} 
+                      <XAxis
+                        dataKey="date"
+                        stroke="#64748b"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
                       />
-                      <Bar dataKey="clicks" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#1e293b",
+                          color: "#f8fafc",
+                        }}
+                        itemStyle={{ color: "#ec4899" }}
+                        cursor={{ fill: "#1e293b" }}
+                      />
+                      <Bar
+                        dataKey="clicks"
+                        fill="#ec4899"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title={`popular categories (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
+                <ChartCard
+                  title={`popular categories (${dateRange === "1" ? "Last 24H" : `Last ${dateRange} Days`})`}
+                >
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
-                      <Pie 
-                        data={chartData.categories} 
-                        dataKey="value" 
-                        innerRadius={60} 
-                        outerRadius={80} 
+                      <Pie
+                        data={chartData.categories}
+                        dataKey="value"
+                        innerRadius={60}
+                        outerRadius={80}
                         paddingAngle={5}
                       >
                         {chartData.categories.map((entry, index) => (
-                          <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                          <Cell
+                            key={`cell-cat-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                            stroke="#0f172a"
+                            strokeWidth={2}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#1e293b",
+                          borderRadius: "8px",
+                        }}
                         itemStyle={{ color: "#ec4899" }}
                       />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                      <Legend
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: "12px" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title={`Top 5 games (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
+                <ChartCard
+                  title={`Top 5 games (${dateRange === "1" ? "Last 24H" : `Last ${dateRange} Days`})`}
+                >
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
-                      <Pie 
-                        data={chartData.recentGames} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={60} 
-                        outerRadius={80} 
+                      <Pie
+                        data={chartData.recentGames}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
                         paddingAngle={5}
                       >
                         {chartData.recentGames.map((entry, index) => (
-                          <Cell key={`cell-recent-${index}`} fill={COLORS[(COLORS.length - 1 - index) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                          <Cell
+                            key={`cell-recent-${index}`}
+                            fill={
+                              COLORS[
+                                (COLORS.length - 1 - index) % COLORS.length
+                              ]
+                            }
+                            stroke="#0f172a"
+                            strokeWidth={2}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#1e293b",
+                          borderRadius: "8px",
+                        }}
                         itemStyle={{ color: "#ec4899" }}
                       />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                      <Legend
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: "12px" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title={`Game popularity (${dateRange === '1' ? 'Last 24H' : `Last ${dateRange} Days`})`}>
+                <ChartCard
+                  title={`Game popularity (${dateRange === "1" ? "Last 24H" : `Last ${dateRange} Days`})`}
+                >
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <PieChart>
-                      <Pie 
-                        data={chartData.organic} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={60} 
-                        outerRadius={80} 
+                      <Pie
+                        data={chartData.organic}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
                         paddingAngle={5}
                       >
                         {chartData.organic.map((entry, index) => (
-                          <Cell key={`cell-org-${index}`} fill={COLORS[(index + 3) % COLORS.length]} stroke="#0f172a" strokeWidth={2} />
+                          <Cell
+                            key={`cell-org-${index}`}
+                            fill={COLORS[(index + 3) % COLORS.length]}
+                            stroke="#0f172a"
+                            strokeWidth={2}
+                          />
                         ))}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderColor: "#1e293b",
+                          borderRadius: "8px",
+                        }}
                         itemStyle={{ color: "#ec4899" }}
                       />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                      <Legend
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: "12px" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartCard>
@@ -760,8 +840,6 @@ const AdminPanel = () => {
 
               {/* --- NEW VISUALIZATION SECTION --- */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-                
-
                 {/* 2. Heatmap */}
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg h-96 flex flex-col">
                   <h3 className="text-slate-400 text-xs uppercase font-bold mb-4 flex items-center gap-2 px-2">
@@ -776,7 +854,8 @@ const AdminPanel = () => {
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
                 <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                   <div className="font-bold text-white flex items-center gap-2">
-                    <List size={16} className="text-indigo-500" /> Recent Activity Log
+                    <List size={16} className="text-indigo-500" /> Recent
+                    Activity Log
                   </div>
                   <button
                     onClick={exportCSV}
@@ -805,7 +884,7 @@ const AdminPanel = () => {
                           <td className="px-4 py-3 text-slate-400 font-mono text-xs whitespace-nowrap">
                             {log.timestamp
                               ? new Date(
-                                  log.timestamp.seconds * 1000
+                                  log.timestamp.seconds * 1000,
                                 ).toLocaleString()
                               : "-"}
                           </td>
@@ -831,17 +910,22 @@ const AdminPanel = () => {
                             )}
                           </td>
                           <td className="px-4 py-3 text-slate-400 text-xs">
-                            {log.os ? (
+                            {log.os || log.deviceType || log.browser ? (
                               <span className="flex flex-col">
-                                <span className="text-white">{log.os}</span>
+                                <span className="text-white">
+                                  {log.os || "Unknown OS"}
+                                </span>
                                 <span className="text-[10px] text-slate-600">
-                                  {log.deviceType}
+                                  {log.deviceType || "Unknown Device"}
+                                  {" · "}
+                                  {log.browser || "Unknown Browser"}
                                 </span>
                               </span>
                             ) : (
-                              <span>{log.device?.split("(")[0] || "Web"}</span>
+                              <span className="text-slate-500">Web</span>
                             )}
                           </td>
+
                           <td className="px-4 py-3 text-right font-mono text-xs text-slate-600">
                             {log.userId === "unknown"
                               ? "Guest"
@@ -1063,7 +1147,7 @@ const AdminPanel = () => {
                                       (newConfig[k] = {
                                         ...newConfig[k],
                                         isFeatured: false,
-                                      })
+                                      }),
                                   );
                                   newConfig[id] = {
                                     ...newConfig[id],
@@ -1141,7 +1225,8 @@ const AdminPanel = () => {
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
                 <div className="p-4 border-b border-slate-800 flex justify-between items-center">
                   <div className="font-bold text-white flex items-center gap-2">
-                    <Shield size={16} className="text-indigo-500" /> Admin Audit Trail
+                    <Shield size={16} className="text-indigo-500" /> Admin Audit
+                    Trail
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -1158,15 +1243,19 @@ const AdminPanel = () => {
                       {auditLogs.map((log) => (
                         <tr key={log.id} className="hover:bg-slate-800/30">
                           <td className="px-6 py-4 text-slate-400 font-mono text-xs whitespace-nowrap">
-                            {log.timestamp?.seconds 
-                              ? new Date(log.timestamp.seconds * 1000).toLocaleString() 
+                            {log.timestamp?.seconds
+                              ? new Date(
+                                  log.timestamp.seconds * 1000,
+                                ).toLocaleString()
                               : "Pending..."}
                           </td>
                           <td className="px-6 py-4 text-white font-medium">
                             {log.adminEmail}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400 border border-blue-800`}>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400 border border-blue-800`}
+                            >
                               {log.action}
                             </span>
                           </td>
@@ -1247,9 +1336,7 @@ const ChartCard = ({ title, children }) => (
        This forces dimensions to be valid immediately, preventing width(-1) errors.
     */}
     <div className="flex-1 w-full min-h-0 relative">
-      <div className="absolute inset-0">
-        {children}
-      </div>
+      <div className="absolute inset-0">{children}</div>
     </div>
   </div>
 );
@@ -1284,8 +1371,6 @@ const Checkbox = ({ checked, onChange, colorClass }) => (
     {checked && <CheckSquare size={14} className="text-white" />}
   </div>
 );
-
-
 
 const UsageHeatmap = ({ data }) => {
   const [selectedCell, setSelectedCell] = useState(null);
@@ -1355,7 +1440,7 @@ const UsageHeatmap = ({ data }) => {
                 const isSelected =
                   selectedCell?.day === dayIdx &&
                   selectedCell?.hour === hourIdx;
-                
+
                 // --- FIX STARTS HERE ---
                 // If we are in the first 2 rows (Sun/Mon), show tooltip BELOW.
                 // Otherwise show it ABOVE.
@@ -1368,7 +1453,7 @@ const UsageHeatmap = ({ data }) => {
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedCell(
-                        isSelected ? null : { day: dayIdx, hour: hourIdx }
+                        isSelected ? null : { day: dayIdx, hour: hourIdx },
                       );
                     }}
                     className={`rounded-sm transition-all relative cursor-pointer
@@ -1383,7 +1468,7 @@ const UsageHeatmap = ({ data }) => {
                         val > 0
                           ? `rgba(236, 72, 153, ${Math.max(
                               0.15,
-                              val / (heatmap.max || 1)
+                              val / (heatmap.max || 1),
                             )})`
                           : "#1e293b",
                     }}
@@ -1395,7 +1480,7 @@ const UsageHeatmap = ({ data }) => {
                         shadow-2xl pointer-events-none whitespace-nowrap z-50
                         ${
                           // Apply conditional positioning class
-                          isTopRows 
+                          isTopRows
                             ? "top-full mt-2" // Render below
                             : "bottom-full mb-2" // Render above (default)
                         }
@@ -1421,9 +1506,7 @@ const UsageHeatmap = ({ data }) => {
       {/* Mobile Hint & Selection Clearer */}
       <div className="mt-4 flex justify-between items-center px-2">
         <p className="text-[10px] text-slate-600 italic md:hidden">
-          {selectedCell
-            ? "Tap again to close"
-            : "Tap squares for details"}
+          {selectedCell ? "Tap again to close" : "Tap squares for details"}
         </p>
         {selectedCell && (
           <button

@@ -870,6 +870,7 @@ const AdminPanel = () => {
                       <tr>
                         <th className="px-4 py-3">Time</th>
                         <th className="px-4 py-3">Game</th>
+                        <th className="px-4 py-3">Name</th>
                         <th className="px-4 py-3">Location</th>
                         <th className="px-4 py-3">Platform</th>
                         <th className="px-4 py-3 text-right">User Hash</th>
@@ -890,6 +891,9 @@ const AdminPanel = () => {
                           </td>
                           <td className="px-4 py-3 font-medium text-white">
                             {log.gameTitle}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-white">
+                            {log.playerName}
                           </td>
                           <td className="px-4 py-3 text-slate-300 text-xs">
                             {log.country ? (

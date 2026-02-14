@@ -869,8 +869,8 @@ const AdminPanel = () => {
                     <thead className="bg-slate-950 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                       <tr>
                         <th className="px-4 py-3">Time</th>
-                        <th className="px-4 py-3">Game</th>
                         <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Game</th>
                         <th className="px-4 py-3">Location</th>
                         <th className="px-4 py-3">Platform</th>
                         <th className="px-4 py-3 text-right">User Hash</th>
@@ -889,11 +889,11 @@ const AdminPanel = () => {
                                 ).toLocaleString()
                               : "-"}
                           </td>
-                          <td className="px-4 py-3 font-medium text-white">
-                            {log.gameTitle}
-                          </td>
                           <td className="px-4 py-3 font-semibold text-indigo-400">
                             {log.playerName}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-white">
+                            {log.gameTitle}
                           </td>
                           <td className="px-4 py-3 text-slate-300 text-xs">
                             {log.country ? (

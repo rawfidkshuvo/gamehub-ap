@@ -892,7 +892,7 @@ const AdminPanel = () => {
                           <td className="px-4 py-3 font-medium text-white">
                             {log.gameTitle}
                           </td>
-                          <td className="px-4 py-3 font-medium text-white">
+                          <td className="px-4 py-3 font-semibold text-indigo-400">
                             {log.playerName}
                           </td>
                           <td className="px-4 py-3 text-slate-300 text-xs">

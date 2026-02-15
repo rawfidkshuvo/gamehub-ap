@@ -395,8 +395,12 @@ const AdminPanel = () => {
           { month: "short", day: "numeric" },
         );
         dateCount[date] = (dateCount[date] || 0) + 1;
-        const cat = log.category || "Other";
-        categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+        // Check if we have the new array format and it's not empty
+        if (Array.isArray(log.categories) && log.categories.length > 0) {
+          log.categories.forEach((cat) => {
+            categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+          });
+        }
         const gameTitle = log.gameTitle || "Unknown";
         recentGameCount[gameTitle] = (recentGameCount[gameTitle] || 0) + 1;
         // Track clicks per game ID for the organic chart within this period
@@ -419,15 +423,20 @@ const AdminPanel = () => {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
+    // Sort categories by value so the biggest slices are first
+    const categoryData = Object.keys(categoryCount)
+      .map((k) => ({
+        name: k,
+        value: categoryCount[k],
+      }))
+      .sort((a, b) => b.value - a.value);
+
     return {
       timeline: Object.keys(dateCount).map((k) => ({
         date: k,
         clicks: dateCount[k],
       })),
-      categories: Object.keys(categoryCount).map((k) => ({
-        name: k,
-        value: categoryCount[k],
-      })),
+      categories: categoryData, // Passed the sorted array here
       recentGames: recentGamesData,
       organic: organicData,
     };
@@ -889,7 +898,7 @@ const AdminPanel = () => {
                                 ).toLocaleString()
                               : "-"}
                           </td>
-                          <td className="px-4 py-3 font-semibold text-indigo-400">
+                          <td className="px-4 py-3 font-semibold text-pink-400">
                             {log.playerName}
                           </td>
                           <td className="px-4 py-3 font-medium text-white">
@@ -903,7 +912,7 @@ const AdminPanel = () => {
                                     {log.city},
                                   </span>
                                 )}
-                                <span className="font-semibold text-indigo-400">
+                                <span className="font-semibold text-pink-400">
                                   {log.country}
                                 </span>
                               </span>

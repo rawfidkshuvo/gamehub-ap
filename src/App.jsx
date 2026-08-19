@@ -81,6 +81,8 @@ const KNOWN_GAMES = [
   { id: 18, title: "Paper Oceans" },
   { id: 19, title: "Royal Menagerie" },
   { id: 20, title: "Fructose Fury" },
+  { id: 21, title: "Colony" },
+
 ];
 
 // --- FIREBASE CONFIGURATION ---

@@ -83,7 +83,7 @@ const KNOWN_GAMES = [
   { id: 20, title: "Fructose Fury" },
   { id: 21, title: "Colony" },
   { id: 22, title: "Crypt and crimson" },
-
+  { id: 23, title: "Reverie" },
 ];
 
 // --- FIREBASE CONFIGURATION ---

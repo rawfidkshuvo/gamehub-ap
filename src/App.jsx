@@ -82,6 +82,7 @@ const KNOWN_GAMES = [
   { id: 19, title: "Royal Menagerie" },
   { id: 20, title: "Fructose Fury" },
   { id: 21, title: "Colony" },
+  { id: 22, title: "Crypt and crimson" },
 
 ];
 

@@ -87,6 +87,7 @@ const KNOWN_GAMES = [
   { id: 24, title: "Lucky Seven" },
   { id: 25, title: "Immune" },
   { id: 26, title: "Dark" },
+  { id: 27, title: "Outbreak" },
 ];
 
 // --- FIREBASE CONFIGURATION ---

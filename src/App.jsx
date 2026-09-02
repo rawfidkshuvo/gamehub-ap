@@ -317,13 +317,13 @@ const AdminPanel = () => {
   };
 
   const exportCSV = () => {
-    const headers = ["Time,Game,Category,Device,Location,User ID"];
+    const headers = ["TimeStamp,Player,Game ID,Game,Category,Device,OS,Browser,Location,User ID"];
     const rows = activityLogs.map((log) => {
       const time = log.timestamp
         ? new Date(log.timestamp.seconds * 1000).toISOString()
         : "";
       const loc = log.country ? `${log.city}-${log.country}` : "Unknown";
-      return `${time},"${log.gameTitle}","${log.category}","${log.device}","${loc}","${log.userId}"`;
+      return `${time},"${log.playerName}","${log.gameId}","${log.gameTitle}","${log.categories}","${log.deviceType}","${log.os}","${log.browser}","${loc}","${log.userId}"`;
     });
     const csvContent =
       "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");

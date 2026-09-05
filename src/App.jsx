@@ -505,6 +505,17 @@ const AdminPanel = () => {
     };
   }, [filteredLogs]);
 
+  // Create a dictionary of the most recent name for every UID
+  const latestNames = useMemo(() => {
+    const map = {};
+    activityLogs.forEach((log) => {
+      if (log.userId && !map[log.userId] && log.playerName) {
+        map[log.userId] = log.playerName;
+      }
+    });
+    return map;
+  }, [activityLogs]);
+
   if (!user)
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
@@ -977,7 +988,9 @@ const AdminPanel = () => {
                               className="flex items-center gap-1.5 hover:text-white transition-colors group cursor-pointer"
                               title="View Player Profile"
                             >
-                              {log.playerName}
+                              {latestNames[log.userId] ||
+                                log.playerName ||
+                                "Anonymous"}
                               <Eye
                                 size={12}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity"

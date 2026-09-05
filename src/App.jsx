@@ -16,6 +16,8 @@ import {
   query,
   orderBy,
   limit,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import {
   LayoutDashboard,
@@ -45,6 +47,21 @@ import {
   Lock,
   Shield,
   Globe,
+  User,
+  Star,
+  Trophy,
+  Medal,
+  Target,
+  Activity,
+  RefreshCw,
+  Calendar,
+  Compass,
+  MapPin,
+  Monitor,
+  Code,
+  Database,
+  Zap,
+  Layers,
 } from "lucide-react";
 import {
   BarChart,
@@ -123,6 +140,7 @@ const AdminPanel = () => {
   const [activeView, setActiveView] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [dateRange, setDateRange] = useState("7");
+  const [viewingPlayerId, setViewingPlayerId] = useState(null); // <-- ADD THIS
 
   // Data State
   const [gamesConfig, setGamesConfig] = useState({});
@@ -138,6 +156,42 @@ const AdminPanel = () => {
 
   // Bulk Action State
   const [selectedGames, setSelectedGames] = useState(new Set());
+
+  // Add to your UI States
+  const [playerSearchTerm, setPlayerSearchTerm] = useState("");
+
+  // Extract and group unique players from the activity logs
+  const uniquePlayers = useMemo(() => {
+    const playerMap = new Map();
+
+    activityLogs.forEach((log) => {
+      if (!log.userId) return;
+
+      if (!playerMap.has(log.userId)) {
+        playerMap.set(log.userId, {
+          userId: log.userId,
+          name: log.playerName || "Anonymous",
+          sessions: 1,
+          lastSeen: log.timestamp ? log.timestamp.seconds : 0,
+        });
+      } else {
+        const p = playerMap.get(log.userId);
+        p.sessions++;
+        if (log.timestamp && log.timestamp.seconds > p.lastSeen) {
+          p.lastSeen = log.timestamp.seconds;
+          p.name = log.playerName || p.name; // Always keep the latest name
+        }
+      }
+    });
+
+    return Array.from(playerMap.values())
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(playerSearchTerm.toLowerCase()) ||
+          p.userId.toLowerCase().includes(playerSearchTerm.toLowerCase()),
+      )
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+  }, [activityLogs, playerSearchTerm]);
 
   // --- AUTH ---
   useEffect(() => {
@@ -317,7 +371,9 @@ const AdminPanel = () => {
   };
 
   const exportCSV = () => {
-    const headers = ["TimeStamp,Player,Game ID,Game,Category,Device,OS,Browser,Location,User ID"];
+    const headers = [
+      "TimeStamp,Player,Game ID,Game,Category,Device,OS,Browser,Location,User ID",
+    ];
     const rows = activityLogs.map((log) => {
       const time = log.timestamp
         ? new Date(log.timestamp.seconds * 1000).toISOString()
@@ -490,6 +546,10 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans flex flex-col md:flex-row overflow-hidden">
+      <AdminPlayerProfileModal
+        playerId={viewingPlayerId}
+        onClose={() => setViewingPlayerId(null)}
+      />
       {/* SIDEBAR */}
       <aside
         className={`fixed md:relative z-50 w-72 h-full bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-300 ${
@@ -525,6 +585,12 @@ const AdminPanel = () => {
             label="Game Manager"
             active={activeView === "games"}
             onClick={() => setActiveView("games")}
+          />
+          <SidebarItem
+            icon={<Users size={18} />}
+            label="Player Manager"
+            active={activeView === "players"}
+            onClick={() => setActiveView("players")}
           />
           <SidebarItem
             icon={<Shield size={18} />}
@@ -906,7 +972,17 @@ const AdminPanel = () => {
                               : "-"}
                           </td>
                           <td className="px-4 py-3 font-semibold text-pink-400">
-                            {log.playerName}
+                            <button
+                              onClick={() => setViewingPlayerId(log.userId)}
+                              className="flex items-center gap-1.5 hover:text-white transition-colors group cursor-pointer"
+                              title="View Player Profile"
+                            >
+                              {log.playerName}
+                              <Eye
+                                size={12}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              />
+                            </button>
                           </td>
                           <td className="px-4 py-3 font-medium text-white">
                             {log.gameTitle}
@@ -1239,6 +1315,93 @@ const AdminPanel = () => {
             </div>
           )}
 
+          {/* --- PLAYER MANAGER VIEW --- */}
+          {activeView === "players" && (
+            <div className="space-y-6 max-w-7xl mx-auto pb-20 animate-in fade-in slide-in-from-bottom-4">
+              {/* Search Bar */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="relative flex-1 w-full max-w-md">
+                  <Search
+                    className="absolute left-3 top-3 text-slate-500"
+                    size={18}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search by Player Name or UID..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2.5 text-white focus:border-indigo-500 outline-none text-sm transition-colors"
+                    value={playerSearchTerm}
+                    onChange={(e) => setPlayerSearchTerm(e.target.value)}
+                  />
+                </div>
+                <div className="text-sm font-bold text-slate-400 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800">
+                  Total Active:{" "}
+                  <span className="text-indigo-400">
+                    {uniquePlayers.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Players Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-950 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">Player</th>
+                        <th className="px-6 py-4">User ID (UID)</th>
+                        <th className="px-6 py-4 text-center">
+                          Recent Sessions
+                        </th>
+                        <th className="px-6 py-4 text-right">Last Seen</th>
+                        <th className="px-6 py-4 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {uniquePlayers.map((p) => (
+                        <tr
+                          key={p.userId}
+                          className="hover:bg-slate-800/50 transition-colors"
+                        >
+                          <td className="px-6 py-4 font-bold text-white flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shrink-0">
+                              <User size={14} className="text-slate-400" />
+                            </div>
+                            {p.name}
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-500">
+                            {p.userId}
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-indigo-400">
+                            {p.sessions}
+                          </td>
+                          <td className="px-6 py-4 text-right text-xs text-slate-400">
+                            {p.lastSeen
+                              ? new Date(p.lastSeen * 1000).toLocaleString()
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => setViewingPlayerId(p.userId)}
+                              className="px-4 py-2 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500 rounded-lg text-xs font-bold transition-all shadow-md"
+                            >
+                              View Profile
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {uniquePlayers.length === 0 && (
+                    <div className="p-12 text-center flex flex-col items-center justify-center text-slate-500">
+                      <Search size={48} className="mb-4 text-slate-700" />
+                      <p>No players found matching "{playerSearchTerm}"</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* --- AUDIT LOGS VIEW --- */}
           {activeView === "security" && (
             <div className="space-y-6 max-w-7xl mx-auto pb-20">
@@ -1536,6 +1699,423 @@ const UsageHeatmap = ({ data }) => {
             Clear
           </button>
         )}
+      </div>
+    </div>
+  );
+};
+
+const AdminPlayerProfileModal = ({ playerId, onClose }) => {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    name: "Unknown",
+    total: 0,
+    firstSeen: null,
+    lastSeen: null,
+    allGames: [],
+    allCategories: [],
+    devices: [],
+    osList: [],
+    browsers: [],
+    locations: [],
+    referrers: [],
+  });
+
+  useEffect(() => {
+    if (!playerId) return;
+
+    const fetchFullPlayerReport = async () => {
+      setLoading(true);
+      try {
+        const q = query(
+          collection(db, "game_click_logs"),
+          where("userId", "==", playerId),
+        );
+        const snapshot = await getDocs(q);
+
+        let totalClicks = 0;
+        let earliest = Infinity;
+        let latest = 0;
+        let latestName = "Unknown";
+
+        const gameTally = {};
+        const catTally = {};
+        const deviceTally = {};
+        const osTally = {};
+        const browserTally = {};
+        const locationTally = {};
+        const referrerTally = {};
+
+        snapshot.forEach((doc) => {
+          totalClicks++;
+          const d = doc.data();
+
+          // Timestamps & Latest Name
+          if (d.timestamp?.seconds) {
+            const sec = d.timestamp.seconds;
+            if (sec < earliest) earliest = sec;
+            if (sec > latest) {
+              latest = sec;
+              if (d.playerName) latestName = d.playerName;
+            }
+          } else if (d.playerName && latestName === "Unknown") {
+            latestName = d.playerName;
+          }
+
+          // Games
+          if (d.gameTitle) {
+            gameTally[d.gameTitle] = (gameTally[d.gameTitle] || 0) + 1;
+          }
+
+          // Categories
+          if (Array.isArray(d.categories)) {
+            d.categories.forEach((cat) => {
+              catTally[cat] = (catTally[cat] || 0) + 1;
+            });
+          }
+
+          // Devices, OS, Browsers
+          const dev = d.deviceType || "Unknown";
+          deviceTally[dev] = (deviceTally[dev] || 0) + 1;
+
+          const os = d.os || "Unknown";
+          osTally[os] = (osTally[os] || 0) + 1;
+
+          const br = d.browser || "Unknown";
+          browserTally[br] = (browserTally[br] || 0) + 1;
+
+          // Locations
+          const loc =
+            d.country && d.country !== "Unknown"
+              ? `${d.city && d.city !== "Unknown" ? d.city + ", " : ""}${d.country}`
+              : "Unknown";
+          locationTally[loc] = (locationTally[loc] || 0) + 1;
+
+          // Referrers
+          const ref = d.referrer || "Direct";
+          referrerTally[ref] = (referrerTally[ref] || 0) + 1;
+        });
+
+        // Helper: sort entries descending without limit
+        const sortEntries = (dict) =>
+          Object.entries(dict).sort((a, b) => b[1] - a[1]);
+
+        setData({
+          name: latestName !== "Unknown" ? latestName : "Anonymous",
+          total: totalClicks,
+          firstSeen: earliest !== Infinity ? earliest : null,
+          lastSeen: latest !== 0 ? latest : null,
+          allGames: sortEntries(gameTally),
+          allCategories: sortEntries(catTally),
+          devices: sortEntries(deviceTally),
+          osList: sortEntries(osTally),
+          browsers: sortEntries(browserTally),
+          locations: sortEntries(locationTally),
+          referrers: sortEntries(referrerTally),
+        });
+      } catch (err) {
+        console.error("Failed to load full player profile:", err);
+      }
+      setLoading(false);
+    };
+
+    fetchFullPlayerReport();
+  }, [playerId]);
+
+  const getBadge = (clicks) => {
+    if (clicks >= 100)
+      return {
+        label: "Grandmaster",
+        color: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30",
+        icon: <Crown className="w-5 h-5 text-yellow-400" />,
+      };
+    if (clicks >= 50)
+      return {
+        label: "Veteran",
+        color: "text-purple-400 bg-purple-400/10 border-purple-400/30",
+        icon: <Trophy className="w-5 h-5 text-purple-400" />,
+      };
+    if (clicks >= 15)
+      return {
+        label: "Enthusiast",
+        color: "text-indigo-400 bg-indigo-400/10 border-indigo-400/30",
+        icon: <Medal className="w-5 h-5 text-indigo-400" />,
+      };
+    if (clicks >= 1)
+      return {
+        label: "Initiate",
+        color: "text-green-400 bg-green-400/10 border-green-400/30",
+        icon: <Star className="w-5 h-5 text-green-400" />,
+      };
+    return {
+      label: "Newcomer",
+      color: "text-slate-400 bg-slate-800 border-slate-700",
+      icon: <User className="w-5 h-5 text-slate-400" />,
+    };
+  };
+
+  if (!playerId) return null;
+  const badge = getBadge(data.total);
+
+  return (
+    <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden">
+        {/* MODAL HEADER */}
+        <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-900/90 backdrop-blur shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 shadow-inner shrink-0">
+              {badge.icon}
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-black text-white">{data.name}</h2>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1 ${badge.color}`}
+                >
+                  {badge.label}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-mono mt-0.5 select-all">
+                UID: {playerId}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* MODAL BODY (SCROLLABLE) */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
+          {loading ? (
+            <div className="py-24 flex flex-col items-center justify-center text-slate-500 gap-3">
+              <RefreshCw className="animate-spin text-indigo-500" size={32} />
+              <p className="text-xs font-mono">Compiling player analytics...</p>
+            </div>
+          ) : (
+            <>
+              {/* TOP STATS CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs uppercase text-slate-500 font-bold block">
+                      Total Clicks
+                    </span>
+                    <span className="text-2xl font-black text-white">
+                      {data.total}
+                    </span>
+                  </div>
+                  <Activity className="text-emerald-400" size={24} />
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs uppercase text-slate-500 font-bold block">
+                      First Seen
+                    </span>
+                    <span className="text-xs font-medium text-slate-300 block mt-1">
+                      {data.firstSeen
+                        ? new Date(data.firstSeen * 1000).toLocaleDateString()
+                        : "Unknown"}
+                    </span>
+                  </div>
+                  <Calendar className="text-blue-400" size={24} />
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs uppercase text-slate-500 font-bold block">
+                      Last Active
+                    </span>
+                    <span className="text-xs font-medium text-slate-300 block mt-1">
+                      {data.lastSeen
+                        ? new Date(data.lastSeen * 1000).toLocaleString()
+                        : "Unknown"}
+                    </span>
+                  </div>
+                  <Compass className="text-pink-400" size={24} />
+                </div>
+              </div>
+
+              {/* LOCATIONS & DEVICE INTELLIGENCE */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Geolocation Log */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <h3 className="text-xs font-bold uppercase text-slate-400 flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                    <MapPin size={15} className="text-rose-400" /> Geolocation
+                    History
+                  </h3>
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {data.locations.length > 0 ? (
+                      data.locations.map(([loc, count]) => (
+                        <div
+                          key={loc}
+                          className="flex justify-between items-center text-xs"
+                        >
+                          <span className="text-slate-300 truncate max-w-[220px]">
+                            {loc}
+                          </span>
+                          <span className="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">
+                            {count} {count === 1 ? "hit" : "hits"}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-slate-600 text-xs italic">
+                        No location recorded
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hardware & Browser */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <h3 className="text-xs font-bold uppercase text-slate-400 flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                    <Monitor size={15} className="text-cyan-400" /> Device &
+                    Browser Info
+                  </h3>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Device Types:</span>
+                      <span className="text-slate-300 font-medium">
+                        {data.devices
+                          .map(([dev, count]) => `${dev} (${count})`)
+                          .join(", ") || "Unknown"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Operating Systems:</span>
+                      <span className="text-slate-300 font-medium">
+                        {data.osList
+                          .map(([os, count]) => `${os} (${count})`)
+                          .join(", ") || "Unknown"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Browsers:</span>
+                      <span className="text-slate-300 font-medium">
+                        {data.browsers
+                          .map(([br, count]) => `${br} (${count})`)
+                          .join(", ") || "Unknown"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Entry Source:</span>
+                      <span className="text-slate-300 font-medium truncate max-w-[180px]">
+                        {data.referrers
+                          .map(([ref, count]) => `${ref} (${count})`)
+                          .join(", ") || "Direct"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* COMPLETE LISTS: ALL GAMES & ALL CATEGORIES (UNCAPPED) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* All Games */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                    <h3 className="text-xs font-bold uppercase text-indigo-400 flex items-center gap-2">
+                      <Gamepad2 size={16} /> Played Games (
+                      {data.allGames.length})
+                    </h3>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">
+                      Clicks / Share
+                    </span>
+                  </div>
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                    {data.allGames.length > 0 ? (
+                      data.allGames.map(([game, count], idx) => {
+                        const pct = Math.round(
+                          (count / (data.total || 1)) * 100,
+                        );
+                        return (
+                          <div key={game} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-slate-200 font-medium truncate pr-2">
+                                <span className="text-slate-600 font-mono mr-1.5">
+                                  #{idx + 1}
+                                </span>
+                                {game}
+                              </span>
+                              <span className="text-slate-400 shrink-0 font-mono">
+                                {count} ({pct}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-indigo-500 h-full rounded-full transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <span className="text-slate-600 text-xs italic">
+                        No games played yet
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* All Categories */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                    <h3 className="text-xs font-bold uppercase text-pink-400 flex items-center gap-2">
+                      <Layers size={16} /> Preferred Genres (
+                      {data.allCategories.length})
+                    </h3>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">
+                      Hits / Share
+                    </span>
+                  </div>
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                    {data.allCategories.length > 0 ? (
+                      data.allCategories.map(([cat, count], idx) => {
+                        const totalCatHits = data.allCategories.reduce(
+                          (acc, cur) => acc + cur[1],
+                          0,
+                        );
+                        const pct = Math.round(
+                          (count / (totalCatHits || 1)) * 100,
+                        );
+                        return (
+                          <div key={cat} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-slate-200 font-medium truncate pr-2">
+                                <span className="text-slate-600 font-mono mr-1.5">
+                                  #{idx + 1}
+                                </span>
+                                {cat}
+                              </span>
+                              <span className="text-slate-400 shrink-0 font-mono">
+                                {count} ({pct}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-pink-500 h-full rounded-full transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <span className="text-slate-600 text-xs italic">
+                        No category data
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

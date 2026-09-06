@@ -18,6 +18,7 @@ import {
   limit,
   where,
   getDocs,
+  deleteDoc,
 } from "firebase/firestore";
 import {
   LayoutDashboard,
@@ -63,6 +64,11 @@ import {
   Zap,
   Layers,
   BugPlay,
+  Server,
+  FileJson,
+  Trash2,
+  AlertOctagon,
+  FolderOpen,
 } from "lucide-react";
 import {
   BarChart,
@@ -86,7 +92,7 @@ const KNOWN_GAMES = [
   { id: 5, title: "Pirates" },
   { id: 6, title: "Fruit Seller" },
   { id: 7, title: "Ghost Dice" },
-  { id: 8, title: "Protocol: Sabotage" },
+  { id: 8, title: "Protocol Sabotage" },
   { id: 9, title: "Equilibrium" },
   { id: 10, title: "Neon Draft" },
   { id: 11, title: "Angry Virus" },
@@ -130,6 +136,255 @@ const COLORS = [
   "#3b82f6",
   "#8b5cf6",
 ];
+
+const DatabaseManager = ({ db, logAdminAction }) => {
+  const [collectionPath, setCollectionPath] = useState("rooms");
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState(null); // For JSON Modal
+  const [error, setError] = useState("");
+
+  const knownCollections = [
+    {
+      label: "Active Rooms (Default)",
+      path: "rooms",
+      icon: <Server size={16} />,
+    },
+    { label: "Game Stats", path: "game_stats", icon: <Activity size={16} /> },
+    { label: "Click Logs", path: "game_click_logs", icon: <List size={16} /> },
+    {
+      label: "Audit Logs",
+      path: "admin_audit_logs",
+      icon: <Shield size={16} />,
+    },
+  ];
+
+  const fetchDocuments = async (path) => {
+    if (!path.trim()) return;
+    setLoading(true);
+    setError("");
+    setDocuments([]);
+    try {
+      // Limit to 100 to prevent massive read costs on huge collections
+      const q = query(collection(db, path), limit(100));
+      const snapshot = await getDocs(q);
+      const docs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        data: doc.data(),
+      }));
+      setDocuments(docs);
+    } catch (err) {
+      setError(err.message);
+      console.error("DB Fetch Error:", err);
+    }
+    setLoading(false);
+  };
+
+  // Fetch when path changes via quick-links
+  useEffect(() => {
+    fetchDocuments(collectionPath);
+  }, [collectionPath]);
+
+  const handleDelete = async (docId) => {
+    if (
+      !window.confirm(
+        `⚠️ DANGER: Are you sure you want to delete document "${docId}"?\n\nIf this is an active room, all players will be kicked immediately. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, collectionPath, docId));
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      logAdminAction(
+        "Database Deletion",
+        `Deleted document ${docId} from /${collectionPath}`,
+      );
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto pb-20 animate-in fade-in slide-in-from-bottom-4">
+      {/* HEADER & QUICK LINKS */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+            <h3 className="text-xs font-bold uppercase text-slate-500 mb-3 flex items-center gap-2">
+              <FolderOpen size={16} className="text-indigo-400" /> Quick Access
+            </h3>
+            <div className="space-y-2">
+              {knownCollections.map((c) => (
+                <button
+                  key={c.path}
+                  onClick={() => setCollectionPath(c.path)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                    collectionPath === c.path
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                      : "bg-slate-950 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+                  }`}
+                >
+                  {c.icon} {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* MAIN EXPLORER AREA */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Custom Path & Game Selector */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col gap-4">
+            
+            {/* Quick Game Room Selector */}
+            <div className="flex-1 w-full">
+              <label className="text-xs font-bold text-emerald-500 uppercase mb-1 block">
+                Quick Inspect: Live Game Rooms
+              </label>
+              <select 
+                onChange={(e) => {
+                  if(e.target.value) {
+                    // Formats the path based on your security rules: artifacts/{appId}/public/data
+                    const gameId = e.target.value.toLowerCase().replace(/\s+/g, '-');
+                    const generatedPath = `artifacts/${gameId}/public/data/rooms`;
+                    setCollectionPath(generatedPath);
+                  }
+                }}
+                className="w-full bg-slate-950 border border-emerald-900/50 rounded-lg px-4 py-2 text-emerald-400 font-bold focus:border-emerald-500 outline-none transition-colors mb-4"
+              >
+                <option value="">-- Select a game to view its active rooms --</option>
+                {KNOWN_GAMES.map(game => (
+                  <option key={game.id} value={game.title}>{game.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex-1 w-full border-t border-slate-800 pt-4">
+              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
+                Target Collection Path (Manual Override)
+              </label>
+              <div className="flex gap-2 w-full">
+                <input 
+                  type="text" 
+                  value={collectionPath}
+                  onChange={(e) => setCollectionPath(e.target.value)}
+                  placeholder="e.g., artifacts/conspiracy/public/data/rooms"
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white font-mono text-sm focus:border-indigo-500 outline-none transition-colors"
+                />
+                <button 
+                  onClick={() => fetchDocuments(collectionPath)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shrink-0"
+                >
+                  <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> 
+                  <span className="hidden sm:inline">Query</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl min-h-[400px] flex flex-col">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+              <div className="font-bold text-white flex items-center gap-2">
+                <Database size={18} className="text-indigo-500" />/
+                {collectionPath}{" "}
+                <span className="text-slate-500 font-normal text-sm">
+                  ({documents.length} docs found)
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto flex-1">
+              {error ? (
+                <div className="p-8 flex flex-col items-center justify-center text-red-400 gap-2">
+                  <AlertOctagon size={32} />
+                  <p className="font-bold text-sm">Query Failed</p>
+                  <p className="text-xs text-slate-500">{error}</p>
+                </div>
+              ) : loading ? (
+                <div className="p-16 flex justify-center text-indigo-500">
+                  <RefreshCw size={32} className="animate-spin" />
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="p-16 text-center text-slate-500 flex flex-col items-center gap-3">
+                  <Database size={48} className="text-slate-700" />
+                  <p>No documents found in this path.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead className="bg-slate-950 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4">Document ID</th>
+                      <th className="px-6 py-4">Fields</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {documents.map((doc) => (
+                      <tr
+                        key={doc.id}
+                        className="hover:bg-slate-800/30 transition-colors group"
+                      >
+                        <td className="px-6 py-4 font-mono text-sm text-indigo-300 font-bold">
+                          {doc.id}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400 font-mono truncate max-w-xs">
+                          {Object.keys(doc.data).length} fields
+                        </td>
+                        <td className="px-6 py-4 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setViewingDoc(doc)}
+                            className="p-2 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 hover:border-indigo-500"
+                            title="Inspect JSON"
+                          >
+                            <FileJson size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            className="p-2 bg-slate-800 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 hover:border-red-500"
+                            title="Force Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* JSON Viewer Modal */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+              <div className="font-mono text-indigo-400 font-bold flex items-center gap-2">
+                <FileJson size={18} /> {viewingDoc.id}
+              </div>
+              <button
+                onClick={() => setViewingDoc(null)}
+                className="text-slate-500 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto bg-[#0d1117] flex-1">
+              <pre className="text-xs text-emerald-400 font-mono">
+                {JSON.stringify(viewingDoc.data, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AdminPanel = () => {
   // Auth State
@@ -604,6 +859,12 @@ const AdminPanel = () => {
             label="Player Manager"
             active={activeView === "players"}
             onClick={() => setActiveView("players")}
+          />
+          <SidebarItem
+            icon={<Database size={18} />}
+            label="DB Manager"
+            active={activeView === "database"}
+            onClick={() => setActiveView("database")}
           />
           <SidebarItem
             icon={<Shield size={18} />}
@@ -1433,6 +1694,11 @@ const AdminPanel = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* --- DATABASE MANAGER VIEW --- */}
+          {activeView === "database" && (
+            <DatabaseManager db={db} logAdminAction={logAdminAction} />
           )}
 
           {/* --- AUDIT LOGS VIEW --- */}

@@ -62,6 +62,7 @@ import {
   Database,
   Zap,
   Layers,
+  BugPlay,
 } from "lucide-react";
 import {
   BarChart,
@@ -328,6 +329,7 @@ const AdminPanel = () => {
           "isNew",
           "isHot",
           "isUpcoming",
+          "betaTesting", // <--- ADD THIS LINE
           "maintenance",
         ];
         toggleFields.forEach((field) => {
@@ -1108,6 +1110,14 @@ const AdminPanel = () => {
                         text="text-pink-100"
                       />
                       <BulkActionButton
+                        active={isBulkActive("betaTesting")}
+                        onClick={() => toggleBulkProperty("betaTesting")}
+                        label="Beta"
+                        icon={<BugPlay size={14} />}
+                        color="bg-rose-600 border-rose-500"
+                        text="text-rose-100"
+                      />
+                      <BulkActionButton
                         active={isBulkActive("maintenance")}
                         onClick={() => toggleBulkProperty("maintenance")}
                         label="Maintenance"
@@ -1184,10 +1194,11 @@ const AdminPanel = () => {
                         <th className="p-4 text-center text-pink-400">
                           Upcoming
                         </th>
+                        <th className="p-4 text-center text-rose-400">Beta</th>
                         <th className="p-4 text-center text-red-500 font-extrabold">
                           Maintenance
                         </th>
-                        <th className="p-4 text-center">Stats</th>
+                        <th className="p-4 text-center">Clicks</th>
                         <th className="p-4 text-center">Boost</th>
                       </tr>
                     </thead>
@@ -1288,6 +1299,15 @@ const AdminPanel = () => {
                                   handleGameToggle(id, "isUpcoming")
                                 }
                                 colorClass="bg-pink-500 border-pink-500"
+                              />
+                            </td>
+                            <td className="p-4 text-center">
+                              <Checkbox
+                                checked={config.betaTesting}
+                                onChange={(v) =>
+                                  handleGameToggle(id, "betaTesting")
+                                }
+                                colorClass="bg-rose-500 border-rose-500"
                               />
                             </td>
                             <td className="p-4 text-center">

@@ -333,7 +333,7 @@ const DatabaseManager = ({ db, logAdminAction }) => {
                         <td className="px-6 py-4 text-xs text-slate-400 font-mono truncate max-w-xs">
                           {Object.keys(doc.data).length} fields
                         </td>
-                        <td className="px-6 py-4 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <td className="px-6 py-4 flex justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setViewingDoc(doc)}
                             className="p-2 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 hover:border-indigo-500"

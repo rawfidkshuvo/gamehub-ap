@@ -138,7 +138,7 @@ const COLORS = [
 ];
 
 const DatabaseManager = ({ db, logAdminAction }) => {
-  const [collectionPath, setCollectionPath] = useState("rooms");
+  const [collectionPath, setCollectionPath] = useState("");
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingDoc, setViewingDoc] = useState(null); // For JSON Modal
@@ -147,7 +147,7 @@ const DatabaseManager = ({ db, logAdminAction }) => {
   const knownCollections = [
     {
       label: "Active Rooms (Default)",
-      path: "rooms",
+      path: "",
       icon: <Server size={16} />,
     },
     { label: "Game Stats", path: "game_stats", icon: <Activity size={16} /> },

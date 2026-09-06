@@ -152,11 +152,6 @@ const DatabaseManager = ({ db, logAdminAction }) => {
     },
     { label: "Game Stats", path: "game_stats", icon: <Activity size={16} /> },
     { label: "Click Logs", path: "game_click_logs", icon: <List size={16} /> },
-    {
-      label: "Audit Logs",
-      path: "admin_audit_logs",
-      icon: <Shield size={16} />,
-    },
   ];
 
   const fetchDocuments = async (path) => {
